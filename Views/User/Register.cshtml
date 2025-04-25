@@ -1,0 +1,83 @@
+﻿@model HermesChatApp.Models.User
+@{
+    ViewData["Title"] = "Register";
+}
+@section Scripts {
+    <script src="~/js/passwordValidation.js"></script>
+}
+<div class="container">
+    <div class="row justify-content-center">
+        <div class="col-md-6">
+            <div class="card shadow-sm">
+                <div class="card-header bg-primary text-white text-center">
+                    <h3>Register</h3>
+                </div>
+                <div class="card-body">
+                    @if (ViewBag.Error != null)
+                    {
+                        <div class="alert alert-danger text-center">@ViewBag.Error</div>
+                    }
+                    <form method="post">
+                        <div asp-validation-summary="ModelOnly" class="text-danger"></div>
+                        <div class="mb-3">
+                            <label asp-for="Username" class="form-label">Username</label>
+                            <div class="input-group">
+                                <span class="input-group-text"><i class="fas fa-user"></i></span>
+                                <input asp-for="Username" class="form-control" placeholder="Username" />
+                            </div>
+                            <span asp-validation-for="Username" class="text-danger"></span>
+                        </div>
+                        <div class="mb-3">
+                            <label asp-for="Email" class="form-label">Email</label>
+                            <div class="input-group">
+                                <span class="input-group-text"><i class="fas fa-envelope"></i></span>
+                                <input asp-for="Email" class="form-control" placeholder="Email" />
+                            </div>
+                            <span asp-validation-for="Email" class="text-danger"></span>
+                        </div>
+                        <div class="mb-3">
+                            <label asp-for="PasswordHash" class="form-label">Password</label>
+                            <div class="input-group">
+                                <span class="input-group-text"><i class="fas fa-key"></i></span>
+                                <input asp-for="PasswordHash" type="password" class="form-control" id="new1Password" placeholder="Password" />
+                            </div>
+                            <span asp-validation-for="PasswordHash" class="text-danger"></span>
+                            <div id="pswd_info" class="mt-2">
+                                <h6>Password must meet the following requirements:</h6>
+                                <ul>
+                                    <li id="letter" class="invalid">At least <strong>one lowercase character</strong></li>
+                                    <li id="capital" class="invalid">At least <strong>one uppercase character</strong></li>
+                                    <li id="number" class="invalid">At least <strong>one number</strong></li>
+                                    <li id="length" class="invalid">At least <strong>8 characters</strong></li>
+                                    <li id="special" class="invalid">At least <strong>one special character</strong></li>
+                                </ul>
+                            </div>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Confirm Password</label>
+                            <div class="input-group">
+                                <span class="input-group-text"><i class="fas fa-key"></i></span>
+                                <input type="password" name="ConfirmPassword" class="form-control" id="new2Password" placeholder="Confirm Password" />
+                            </div>
+                            <div id="pswd_equal" class="mt-2">
+                                <ul>
+                                    <li id="match" class="invalid">Passwords must match</li>
+                                </ul>
+                            </div>
+                        </div>
+                        <button type="submit" class="btn btn-primary w-100">Register</button>
+                    </form>
+                </div>
+                <div class="card-footer text-center">
+                    <a asp-controller="User" asp-action="Login" class="text-primary">Already have an account? Login</a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+<style>
+    .invalid { color: #dc3545; }
+    .valid { color: #28a745; }
+    .card { border-radius: 10px; }
+    .input-group-text { background-color: #f8f9fa; }
+</style>

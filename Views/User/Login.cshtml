@@ -1,0 +1,53 @@
+﻿@{
+    ViewData["Title"] = "Login";
+}
+<div class="container">
+    <div class="row justify-content-center">
+        <div class="col-md-6">
+            <div class="card shadow-sm">
+                <div class="card-header bg-primary text-white text-center">
+                    <h3>Login</h3>
+                </div>
+                <div class="card-body">
+                    @if (ViewBag.Error != null)
+                    {
+                        <div class="alert alert-danger text-center">@ViewBag.Error</div>
+                    }
+                    @if (TempData["SuccessfulRegister"] != null)
+                    {
+                        <div class="alert alert-success text-center">@TempData["SuccessfulRegister"]</div>
+                    }
+                    <form method="post">
+                        <div class="mb-3">
+                            <label class="form-label">Username</label>
+                            <div class="input-group">
+                                <span class="input-group-text"><i class="fas fa-user"></i></span>
+                                <input name="username" class="form-control" placeholder="Username" />
+                            </div>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Password</label>
+                            <div class="input-group">
+                                <span class="input-group-text"><i class="fas fa-key"></i></span>
+                                <input name="password" type="password" class="form-control" placeholder="Password" />
+                            </div>
+                        </div>
+                        <button type="submit" class="btn btn-primary w-100">Login</button>
+                    </form>
+                </div>
+                <div class="card-footer text-center">
+                    <a asp-controller="User" asp-action="Register" class="text-primary">New to Hermes? Sign up</a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+<style>
+    .card {
+        border-radius: 10px;
+    }
+
+    .input-group-text {
+        background-color: #f8f9fa;
+    }
+</style>
