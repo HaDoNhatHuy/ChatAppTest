@@ -41,7 +41,7 @@ body {
     padding: 0;
 }
 
-.left-sidebar, .right-sidebar {
+.left-sidebar {
     background-color: #fafafa;
 }
 
@@ -66,9 +66,11 @@ body {
 }
 
 .message {
+    display: flex;
+    align-items: flex-start;
     max-width: 60%;
     padding: 10px 15px;
-    margin-bottom: 10px;
+    margin-bottom: 15px;
     border-radius: 20px;
     position: relative;
     font-size: 0.95rem;
@@ -80,12 +82,24 @@ body {
         color: #fff;
         margin-left: auto;
         margin-right: 10px;
+        flex-direction: row-reverse;
     }
 
     .message.received {
         background-color: #e4e6eb;
         color: #000;
         margin-left: 10px;
+    }
+
+    .message .avatar {
+        width: 32px;
+        height: 32px;
+        border-radius: 50%;
+        margin: 0 10px;
+    }
+
+    .message .content {
+        flex: 1;
     }
 
     .message strong {
@@ -162,22 +176,70 @@ body {
     border-radius: 10px;
     box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
     z-index: 1000;
+    display: flex;
+    flex-direction: column;
+    padding: 0;
 }
 
 .video-wrapper {
-    display: flex;
-    justify-content: space-between;
+    position: relative;
+    width: 100%;
+    height: 500px; /* Adjust height as needed */
 }
 
-.local-video, .remote-video {
-    width: 48%;
-    border-radius: 10px;
+.remote-video-container {
+    width: 100%;
+    height: 100%;
+}
+
+.remote-video {
+    width: 100%;
+    height: 100%;
     object-fit: cover;
+    border-radius: 10px 10px 0 0;
+}
+
+.local-video-container {
+    position: absolute;
+    bottom: 20px;
+    right: 20px;
+    width: 200px;
+    height: 150px;
+    background-color: #000;
+    border-radius: 10px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
 }
 
 .local-video {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    border-radius: 10px;
     transform: scaleX(-1); /* Mirror local video */
 }
+
+.video-label {
+    position: absolute;
+    bottom: 5px;
+    left: 10px;
+    color: #fff;
+    font-size: 0.9rem;
+    background-color: rgba(0, 0, 0, 0.5);
+    padding: 2px 8px;
+    border-radius: 10px;
+}
+
+.video-controls {
+    display: flex;
+    justify-content: center;
+    padding: 10px;
+    background-color: #1a1a1a;
+    border-radius: 0 0 10px 10px;
+}
+
+    .video-controls .btn-danger {
+        padding: 8px 20px;
+    }
 
 .input-group .form-control {
     border-radius: 20px 0 0 20px;
@@ -191,11 +253,29 @@ body {
     padding: 10px 15px;
     border-radius: 8px;
     margin-bottom: 5px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
 }
 
     .list-unstyled li:hover {
         background-color: #e4e6eb;
     }
+
+    .list-unstyled li .status-dot {
+        width: 12px;
+        height: 12px;
+        border-radius: 50%;
+        display: inline-block;
+    }
+
+        .list-unstyled li .status-dot.online {
+            background-color: #00d68f;
+        }
+
+        .list-unstyled li .status-dot.offline {
+            background-color: #adb5bd;
+        }
 
 .card {
     border-radius: 10px;
@@ -217,3 +297,55 @@ body {
 .cursor-pointer {
     cursor: pointer;
 }
+
+/* Call Modal Styles (used for both call and friend request) */
+.call-modal {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.5);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 2000;
+}
+
+.call-modal-content {
+    background-color: #fff;
+    padding: 20px;
+    border-radius: 10px;
+    text-align: center;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+}
+
+.call-buttons {
+    margin-top: 20px;
+    display: flex;
+    justify-content: center;
+    gap: 20px;
+}
+
+#searchResults, #friendRequests {
+    max-height: 150px;
+    overflow-y: auto;
+}
+
+    #searchResults .user-item, #friendRequests .request-item {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 8px 12px;
+        border-radius: 8px;
+        margin-bottom: 5px;
+    }
+
+        #searchResults .user-item:hover, #friendRequests .request-item:hover {
+            background-color: #e4e6eb;
+        }
+
+        #searchResults .user-item .btn, #friendRequests .request-item .btn {
+            padding: 5px 10px;
+            font-size: 0.85rem;
+        }

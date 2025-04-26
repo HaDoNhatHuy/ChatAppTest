@@ -31,7 +31,6 @@ namespace HermesChatApp.Controllers
                 return View();
             }
 
-            // Lưu username vào session sau khi đăng nhập thành công
             HttpContext.Session.SetString("Username", username);
             return RedirectToAction("Index", "Chat");
         }
@@ -55,7 +54,7 @@ namespace HermesChatApp.Controllers
                 ViewBag.Error = "Passwords do not match.";
                 return View();
             }
-
+            
             _context.Users.Add(user);
             _context.SaveChanges();
 
@@ -67,6 +66,24 @@ namespace HermesChatApp.Controllers
         {
             HttpContext.Session.Clear();
             return RedirectToAction("Login");
+        }
+
+        [HttpGet]
+        public IActionResult SearchUsers(string query)
+        {
+            if (string.IsNullOrEmpty(query))
+            {
+                return Json(new { users = new List<string>() });
+            }
+
+            var currentUser = HttpContext.Session.GetString("Username");
+            var users = _context.Users
+                .Where(u => u.Username.Contains(query) && u.Username != currentUser)
+                .Select(u => u.Username)
+                .Take(10)
+                .ToList();
+
+            return Json(new { users });
         }
 
         //private string HashPassword(string password)

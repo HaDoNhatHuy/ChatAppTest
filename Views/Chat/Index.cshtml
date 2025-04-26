@@ -12,28 +12,26 @@
     <script src="~/js/chat.js"></script>
 }
 <div class="chat-container">
-    <!-- Sidebar Left: Chat Rooms -->
+    <!-- Sidebar Left: Friends -->
     <div class="sidebar left-sidebar">
-        <div class="p-3 border-bottom">
-            <h5 class="text-center mb-0">Chat Rooms</h5>
+        <div class="p-3 border-bottom d-flex justify-content-between align-items-center">
+            <h5 class="mb-0">Friends</h5>
+            <a href="/User/Logout" class="btn btn-outline-primary btn-sm rounded-pill">Logout</a>
         </div>
         <div class="p-3">
             <div class="input-group mb-3">
-                <input type="text" id="roomName" class="form-control rounded-pill" placeholder="Enter room name" />
-                <button id="joinRoomButton" class="btn btn-primary ms-2 rounded-pill">Join</button>
+                <input type="text" id="searchUser" class="form-control rounded-pill" placeholder="Search users..." />
             </div>
-            <h6 id="groupError" class="text-danger text-center"></h6>
-            <ul id="roomList" class="list-unstyled mt-3">
-                <!-- Rooms will be dynamically added here -->
-            </ul>
+            <div id="searchResults" class="mb-3"></div>
+            <div id="friendRequests" class="mb-3"></div>
+            <ul id="friendList" class="list-unstyled mt-3"></ul>
         </div>
     </div>
 
     <!-- Chat Area -->
     <div class="chat-area">
         <div class="chat-header p-3 border-bottom d-flex align-items-center">
-            <h5 class="mb-0 flex-grow-1" id="chat-intro">Select a room to start chatting</h5>
-            <button id="endCallButton" class="btn btn-danger d-none rounded-pill">End Call</button>
+            <h5 class="mb-0 flex-grow-1" id="chat-intro">Select a friend to start chatting</h5>
         </div>
         <div class="messages p-3">
             <ul id="messagesList" class="list-unstyled"></ul>
@@ -45,17 +43,38 @@
         </div>
         <div id="videoContainer" class="video-container d-none p-3 bg-dark">
             <div class="video-wrapper">
-                <video id="localVideo" autoplay muted class="local-video"></video>
-                <video id="remoteVideo" autoplay class="remote-video"></video>
+                <div class="remote-video-container">
+                    <video id="remoteVideo" autoplay class="remote-video"></video>
+                    <span id="remoteUserLabel" class="video-label"></span>
+                </div>
+                <div class="local-video-container">
+                    <video id="localVideo" autoplay muted class="local-video"></video>
+                    <span id="localUserLabel" class="video-label"></span>
+                </div>
+            </div>
+            <div class="video-controls">
+                <button id="endCallButton" class="btn btn-danger rounded-pill">Stop Call</button>
             </div>
         </div>
-    </div>
-
-    <!-- Sidebar Right: Users Online -->
-    <div class="sidebar right-sidebar">
-        <div class="p-3 border-bottom">
-            <h5 class="text-center mb-0">Users Online</h5>
+        <!-- Incoming Call Modal -->
+        <div id="callModal" class="call-modal d-none">
+            <div class="call-modal-content">
+                <h5>Incoming Call from <span id="callerName"></span></h5>
+                <div class="call-buttons">
+                    <button id="acceptCallButton" class="btn btn-success rounded-pill">Accept</button>
+                    <button id="declineCallButton" class="btn btn-danger rounded-pill">Decline</button>
+                </div>
+            </div>
         </div>
-        <ul id="userOnlineList" class="list-unstyled p-3"></ul>
+        <!-- Friend Request Modal -->
+        <div id="friendRequestModal" class="call-modal d-none">
+            <div class="call-modal-content">
+                <h5>Friend Request from <span id="friendRequestSender"></span></h5>
+                <div class="call-buttons">
+                    <button id="acceptFriendRequestButton" class="btn btn-success rounded-pill">Accept</button>
+                    <button id="declineFriendRequestButton" class="btn btn-danger rounded-pill">Decline</button>
+                </div>
+            </div>
+        </div>
     </div>
 </div>
