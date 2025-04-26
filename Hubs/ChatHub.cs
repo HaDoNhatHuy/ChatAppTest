@@ -96,5 +96,22 @@ namespace HermesChatApp.Hubs
                 throw new HubException($"User {targetUser} not found or not online.");
             }
         }
+        public async Task SendCallEnded(string targetUser)
+        {
+            var sender = _userConnections.FirstOrDefault(x => x.Value == Context.ConnectionId).Key;
+            if (string.IsNullOrEmpty(sender))
+            {
+                throw new HubException("Sender not found.");
+            }
+
+            if (_userConnections.TryGetValue(targetUser, out var targetConnectionId))
+            {
+                await Clients.Client(targetConnectionId).SendAsync("CallEnded", sender);
+            }
+            else
+            {
+                throw new HubException($"User {targetUser} not found or not online.");
+            }
+        }
     }
 }

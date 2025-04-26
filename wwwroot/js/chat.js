@@ -8,6 +8,7 @@ let isConnected = false;
 let peer = null;
 let localStream = null;
 let isCalling = false;
+let currentCallTarget = null;
 
 connection.on("ReceiveMessage", function (user, message) {
     const li = document.createElement("li");
@@ -28,6 +29,13 @@ connection.on("ReceiveUsersOnline", function (users) {
         li.onclick = () => initiateVideoCall(user);
         ul.appendChild(li);
     });
+});
+
+connection.on("CallEnded", function (sender) {
+    console.log(`Received CallEnded signal from ${sender}`);
+    if (isCalling && (sender === currentCallTarget || currentCallTarget === null)) {
+        endCall();
+    }
 });
 
 connection.start().then(function () {
@@ -94,6 +102,7 @@ function initiateVideoCall(targetUser) {
     }
 
     isCalling = true;
+    currentCallTarget = targetUser;
 
     const existingCallingMessage = document.getElementById("callingMessage");
     if (existingCallingMessage) {
@@ -124,16 +133,13 @@ function initiateVideoCall(targetUser) {
                 stream: stream,
                 config: {
                     iceServers: [
-                        { urls: "stun:stun.l.google.com:19302" },
-                        { urls: "stun:stun1.l.google.com:19302" },
-                        { urls: "stun:stun2.l.google.com:19302" },
-                        { urls: "stun:stun3.l.google.com:19302" },
-                        { urls: "stun:stun4.l.google.com:19302" },
-                        {
-                            urls: "turn:turn.anyfirewall.com:443?transport=tcp",
-                            username: "webrtc",
-                            credential: "webrtc"
-                        }
+                        { urls: "stun:stun.relay.metered.ca:80" },
+                        { urls: "turn:global.relay.metered.ca:80", username: "7307403595bd6e385297b0c5", credential: "PGPYPmfZWAsp45y" },
+                        { urls: "turn:global.relay.metered.ca:80?transport=tcp", username: "7307403595bd6e385297b0c5", credential: "PGPYPmfZWAsp45y" },
+                        { urls: "turn:global.relay.metered.ca:443", username: "7307403595bd6e385297b0c5", credential: "PGPYPmfZWAsp45y" },
+                        { urls: "turn:global.relay.metered.ca:443?transport=tcp", username: "7307403595bd6e385297b0c5", credential: "PGPYPmfZWAsp45y" },
+                        { urls: "turns:global.relay.metered.ca:443", username: "7307403595bd6e385297b0c5", credential: "PGPYPmfZWAsp45y" },
+                        { urls: "turns:global.relay.metered.ca:443?transport=tcp", username: "7307403595bd6e385297b0c5", credential: "PGPYPmfZWAsp45y" }
                     ]
                 }
             });
@@ -164,15 +170,19 @@ function initiateVideoCall(targetUser) {
                 console.log("WebRTC connection established successfully");
             });
 
+            peer.on("ice", candidate => {
+                console.log("ICE candidate on initiator:", candidate);
+            });
+
             peer.on("error", err => {
-                console.error("Peer error:", err);
+                console.error("Peer error on initiator:", err);
                 alert("An error occurred during the call: " + err.message);
                 callingMessage.remove();
                 endCall();
             });
 
             peer.on("close", () => {
-                console.log("WebRTC connection closed");
+                console.log("WebRTC connection closed on initiator");
                 endCall();
             });
 
@@ -193,11 +203,17 @@ function initiateVideoCall(targetUser) {
             alert("Could not access webcam or microphone. Please check your device and permissions.");
             callingMessage.remove();
             isCalling = false;
+            currentCallTarget = null;
         });
 }
 
 connection.on("ReceiveSignal", function (sender, signalData) {
     console.log(`Received signal from ${sender}:`, signalData);
+
+    if (isCalling) {
+        console.log(`Ignoring signal from ${sender} because a call is already in progress`);
+        return;
+    }
 
     const videoContainer = document.getElementById("videoContainer");
     if (!videoContainer) {
@@ -209,10 +225,6 @@ connection.on("ReceiveSignal", function (sender, signalData) {
     const existingCallPrompt = document.getElementById("callPrompt");
     if (existingCallPrompt) {
         existingCallPrompt.remove();
-    }
-
-    if (isCalling) {
-        endCall();
     }
 
     const callPrompt = document.createElement("div");
@@ -233,6 +245,7 @@ connection.on("ReceiveSignal", function (sender, signalData) {
         }
 
         isCalling = true;
+        currentCallTarget = sender;
         callPrompt.remove();
 
         navigator.mediaDevices.getUserMedia({ video: true, audio: true })
@@ -253,16 +266,13 @@ connection.on("ReceiveSignal", function (sender, signalData) {
                     stream: stream,
                     config: {
                         iceServers: [
-                            { urls: "stun:stun.l.google.com:19302" },
-                            { urls: "stun:stun1.l.google.com:19302" },
-                            { urls: "stun:stun2.l.google.com:19302" },
-                            { urls: "stun:stun3.l.google.com:19302" },
-                            { urls: "stun:stun4.l.google.com:19302" },
-                            {
-                                urls: "turn:turn.anyfirewall.com:443?transport=tcp",
-                                username: "webrtc",
-                                credential: "webrtc"
-                            }
+                            { urls: "stun:stun.relay.metered.ca:80" },
+                            { urls: "turn:global.relay.metered.ca:80", username: "7307403595bd6e385297b0c5", credential: "PGPYPmfZWAsp45y" },
+                            { urls: "turn:global.relay.metered.ca:80?transport=tcp", username: "7307403595bd6e385297b0c5", credential: "PGPYPmfZWAsp45y" },
+                            { urls: "turn:global.relay.metered.ca:443", username: "7307403595bd6e385297b0c5", credential: "PGPYPmfZWAsp45y" },
+                            { urls: "turn:global.relay.metered.ca:443?transport=tcp", username: "7307403595bd6e385297b0c5", credential: "PGPYPmfZWAsp45y" },
+                            { urls: "turns:global.relay.metered.ca:443", username: "7307403595bd6e385297b0c5", credential: "PGPYPmfZWAsp45y" },
+                            { urls: "turns:global.relay.metered.ca:443?transport=tcp", username: "7307403595bd6e385297b0c5", credential: "PGPYPmfZWAsp45y" }
                         ]
                     }
                 });
@@ -285,6 +295,10 @@ connection.on("ReceiveSignal", function (sender, signalData) {
 
                 peer.on("connect", () => {
                     console.log("WebRTC connection established successfully for receiver");
+                });
+
+                peer.on("ice", candidate => {
+                    console.log("ICE candidate for receiver:", candidate);
                 });
 
                 peer.on("error", err => {
@@ -322,6 +336,7 @@ connection.on("ReceiveSignal", function (sender, signalData) {
                 console.error("Error accessing media devices for receiver:", err);
                 alert("Could not access webcam or microphone. Please check your device and permissions.");
                 isCalling = false;
+                currentCallTarget = null;
             });
     });
 
@@ -339,6 +354,11 @@ document.getElementById("startVideoCall").addEventListener("click", function () 
 });
 
 function endCall() {
+    if (currentCallTarget && isConnected) {
+        connection.invoke("SendCallEnded", currentCallTarget)
+            .catch(err => console.error("Error sending CallEnded signal:", err.toString()));
+    }
+
     if (peer) {
         peer.destroy();
         peer = null;
@@ -350,6 +370,7 @@ function endCall() {
     document.getElementById("localVideo").srcObject = null;
     document.getElementById("remoteVideo").srcObject = null;
     document.getElementById("videoContainer").classList.add("d-none");
+
     const callingMessage = document.getElementById("callingMessage");
     if (callingMessage) {
         callingMessage.remove();
@@ -358,5 +379,12 @@ function endCall() {
     if (stopButton) {
         stopButton.remove();
     }
+    const callPrompt = document.getElementById("callPrompt");
+    if (callPrompt) {
+        callPrompt.remove();
+    }
+
     isCalling = false;
+    currentCallTarget = null;
+    console.log("Call ended, state reset: isCalling =", isCalling, "currentCallTarget =", currentCallTarget);
 }
