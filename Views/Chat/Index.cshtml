@@ -13,38 +13,49 @@
 }
 <div class="chat-container">
     <!-- Sidebar Left: Chat Rooms -->
-    <div class="sidebar">
-        <h5 class="text-center mb-3">Chat Rooms</h5>
-        <div class="mb-3">
-            <label for="roomName" class="form-label">Enter room name</label>
-            <input type="text" id="roomName" class="form-control" placeholder="Room name" />
+    <div class="sidebar left-sidebar">
+        <div class="p-3 border-bottom">
+            <h5 class="text-center mb-0">Chat Rooms</h5>
         </div>
-        <button id="joinRoomButton" class="btn btn-primary w-100 mb-3">Join Room</button>
-        <h6 id="groupError" class="text-danger text-center"></h6>
+        <div class="p-3">
+            <div class="input-group mb-3">
+                <input type="text" id="roomName" class="form-control rounded-pill" placeholder="Enter room name" />
+                <button id="joinRoomButton" class="btn btn-primary ms-2 rounded-pill">Join</button>
+            </div>
+            <h6 id="groupError" class="text-danger text-center"></h6>
+            <ul id="roomList" class="list-unstyled mt-3">
+                <!-- Rooms will be dynamically added here -->
+            </ul>
+        </div>
     </div>
 
     <!-- Chat Area -->
     <div class="chat-area">
-        <div class="p-3 border-bottom">
-            <h5 class="text-center" id="chat-intro">Select a room to start chatting</h5>
+        <div class="chat-header p-3 border-bottom d-flex align-items-center">
+            <h5 class="mb-0 flex-grow-1" id="chat-intro">Select a room to start chatting</h5>
+            <button id="endCallButton" class="btn btn-danger d-none rounded-pill">End Call</button>
         </div>
-        <div class="messages">
+        <div class="messages p-3">
             <ul id="messagesList" class="list-unstyled"></ul>
         </div>
-        <div class="input-area d-flex">
-            <textarea id="messageInput" class="form-control me-2" placeholder="Type a message..." rows="2"></textarea>
-            <button id="sendButton" class="btn btn-primary"><i class="fas fa-paper-plane"></i> Send</button>
-            <button id="startVideoCall" class="btn btn-success ms-2"><i class="fas fa-video"></i> Call</button>
+        <div class="input-area p-3 border-top d-flex align-items-center">
+            <textarea id="messageInput" class="form-control rounded-pill me-2" placeholder="Type a message..." rows="1"></textarea>
+            <button id="sendButton" class="btn btn-primary rounded-circle"><i class="fas fa-paper-plane"></i></button>
+            <button id="startVideoCall" class="btn btn-success rounded-circle ms-2"><i class="fas fa-video"></i></button>
         </div>
-        <div id="videoContainer" class="d-none p-3 bg-light">
-            <video id="localVideo" autoplay muted class="w-50 d-inline-block"></video>
-            <video id="remoteVideo" autoplay class="w-50 d-inline-block"></video>
+        <div id="videoContainer" class="video-container d-none p-3 bg-dark">
+            <div class="video-wrapper">
+                <video id="localVideo" autoplay muted class="local-video"></video>
+                <video id="remoteVideo" autoplay class="remote-video"></video>
+            </div>
         </div>
     </div>
 
     <!-- Sidebar Right: Users Online -->
-    <div class="sidebar">
-        <h5 class="text-center mb-3">Users Online</h5>
-        <ul id="userOnlineList" class="list-unstyled"></ul>
+    <div class="sidebar right-sidebar">
+        <div class="p-3 border-bottom">
+            <h5 class="text-center mb-0">Users Online</h5>
+        </div>
+        <ul id="userOnlineList" class="list-unstyled p-3"></ul>
     </div>
 </div>

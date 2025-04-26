@@ -1,364 +1,174 @@
-﻿"use strict";
-
-const connection = new signalR.HubConnectionBuilder()
-    .withUrl(`/chatHub?username=${encodeURIComponent(currentUser)}`)
+﻿const connection = new signalR.HubConnectionBuilder()
+    .withUrl("/chatHub?username=" + encodeURIComponent(currentUser))
+    .configureLogging(signalR.LogLevel.Information)
     .build();
 
-let isConnected = false;
+let currentRoom = "";
 let peer = null;
 let localStream = null;
-let isCalling = false;
-let currentCallTarget = null;
 
-connection.on("ReceiveMessage", function (user, message) {
-    const li = document.createElement("li");
-    li.className = `message ${user === currentUser ? "sent" : ""}`;
-    const time = new Date().toLocaleTimeString();
-    li.innerHTML = `<strong>${user}</strong>: ${message} <small class="text-muted">${time}</small>`;
-    document.getElementById("messagesList").appendChild(li);
-    document.querySelector(".messages").scrollTop = document.querySelector(".messages").scrollHeight;
+async function startConnection() {
+    try {
+        await connection.start();
+        console.log("SignalR Connected.");
+        await connection.invoke("GetUsersOnline");
+    } catch (err) {
+        console.error(err);
+        setTimeout(startConnection, 5000);
+    }
+}
+
+connection.onclose(async () => {
+    await startConnection();
 });
 
-connection.on("ReceiveUsersOnline", function (users) {
-    const ul = document.getElementById("userOnlineList");
-    ul.innerHTML = "";
+connection.on("ReceiveMessage", (user, message) => {
+    const li = document.createElement("li");
+    li.className = `message ${user === currentUser ? "sent" : ""}`;
+    li.innerHTML = `<strong>${user}</strong>: ${message}`;
+    document.getElementById("messagesList").appendChild(li);
+    document.getElementById("messagesList").scrollTop = document.getElementById("messagesList").scrollHeight;
+});
+
+connection.on("ReceiveUsersOnline", (users) => {
+    const userList = document.getElementById("userOnlineList");
+    userList.innerHTML = "";
     users.forEach(user => {
         const li = document.createElement("li");
         li.textContent = user;
-        li.className = "p-2 rounded hover-bg-light cursor-pointer";
-        li.onclick = () => initiateVideoCall(user);
-        ul.appendChild(li);
+        li.className = "p-2 hover-bg-light cursor-pointer";
+        li.onclick = () => startVideoCall(user);
+        userList.appendChild(li);
     });
 });
 
-connection.on("CallEnded", function (sender) {
-    console.log(`Received CallEnded signal from ${sender}`);
-    if (isCalling && (sender === currentCallTarget || currentCallTarget === null)) {
-        endCall();
+document.getElementById("joinRoomButton").addEventListener("click", async () => {
+    const roomName = document.getElementById("roomName").value.trim();
+    if (roomName) {
+        currentRoom = roomName;
+        document.getElementById("chat-intro").textContent = `Chatting in ${roomName}`;
+        await connection.invoke("JoinRoom", roomName).catch(err => console.error(err));
+        document.getElementById("messagesList").innerHTML = "";
+    } else {
+        document.getElementById("groupError").textContent = "Please enter a room name.";
     }
 });
 
-connection.start().then(function () {
-    isConnected = true;
-    console.log("SignalR connected successfully for user: " + currentUser);
-    connection.invoke("GetUsersOnline").catch(function (err) {
-        return console.error("Error invoking GetUsersOnline:", err.toString());
-    });
-}).catch(function (err) {
-    isConnected = false;
-    console.error("SignalR connection failed:", err.toString());
-    alert("Failed to connect to the chat server. Please refresh the page and try again.");
-});
-
-document.getElementById("sendButton").addEventListener("click", function (event) {
-    if (!isConnected) {
-        alert("Please wait for the connection to be established.");
-        event.preventDefault();
-        return;
-    }
-
-    const user = currentUser;
-    const message = document.getElementById("messageInput").value;
-    const room = document.getElementById("roomName").value || "General";
-    if (message.trim()) {
-        connection.invoke("SendMessage", user, message, room).catch(function (err) {
-            return console.error("Error sending message:", err.toString());
-        });
+document.getElementById("sendButton").addEventListener("click", () => {
+    const message = document.getElementById("messageInput").value.trim();
+    if (message && currentRoom) {
+        connection.invoke("SendMessage", currentUser, message, currentRoom).catch(err => console.error(err));
         document.getElementById("messageInput").value = "";
     }
-    event.preventDefault();
 });
 
-document.getElementById("joinRoomButton").addEventListener("click", function (event) {
-    if (!isConnected) {
-        alert("Please wait for the connection to be established.");
+document.getElementById("messageInput").addEventListener("keypress", (event) => {
+    if (event.key === "Enter" && !event.shiftKey) {
         event.preventDefault();
-        return;
+        document.getElementById("sendButton").click();
     }
-
-    const room = document.getElementById("roomName").value || "General";
-    document.getElementById("chat-intro").textContent = `Room: ${room}`;
-    connection.invoke("JoinRoom", room).catch(function (err) {
-        document.getElementById("groupError").textContent = "Error joining room.";
-        return console.error(err.toString());
-    });
-    event.preventDefault();
 });
 
-function initiateVideoCall(targetUser) {
-    if (!isConnected) {
-        alert("Please wait for the connection to be established.");
+// WebRTC Video Call Logic
+async function startVideoCall(targetUser) {
+    if (!currentRoom) {
+        alert("Please join a room first.");
         return;
     }
 
-    if (targetUser === currentUser) {
-        alert("You cannot call yourself.");
-        return;
+    try {
+        // Get local video stream
+        localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+        document.getElementById("localVideo").srcObject = localStream;
+        document.getElementById("videoContainer").classList.remove("d-none");
+
+        // Initialize SimplePeer
+        peer = new SimplePeer({
+            initiator: true,
+            trickle: false,
+            stream: localStream
+        });
+
+        peer.on("signal", data => {
+            console.log("Sending signal to " + targetUser);
+            connection.invoke("SendSignal", targetUser, JSON.stringify(data)).catch(err => console.error(err));
+        });
+
+        peer.on("stream", stream => {
+            console.log("Received remote stream");
+            document.getElementById("remoteVideo").srcObject = stream;
+        });
+
+        peer.on("error", err => {
+            console.error("Peer error:", err);
+            endCall();
+        });
+
+        peer.on("close", () => {
+            console.log("Peer connection closed");
+            endCall();
+        });
+
+    } catch (err) {
+        console.error("Error accessing media devices:", err);
+        alert("Could not access camera or microphone.");
     }
+}
 
-    if (isCalling) {
-        alert("You are already in a call. Please end the current call before starting a new one.");
-        return;
-    }
+connection.on("ReceiveSignal", async (sender, signalData) => {
+    console.log("Received signal from " + sender);
 
-    isCalling = true;
-    currentCallTarget = targetUser;
-
-    const existingCallingMessage = document.getElementById("callingMessage");
-    if (existingCallingMessage) {
-        existingCallingMessage.remove();
-    }
-
-    const callingMessage = document.createElement("div");
-    callingMessage.id = "callingMessage";
-    callingMessage.className = "text-center p-3";
-    callingMessage.textContent = `Calling ${targetUser}...`;
-    document.getElementById("videoContainer").appendChild(callingMessage);
-
-    navigator.mediaDevices.getUserMedia({ video: true, audio: true })
-        .then(stream => {
-            console.log("Local stream obtained successfully:", stream);
-            localStream = stream;
-            const localVideo = document.getElementById("localVideo");
-            localVideo.srcObject = stream;
-            localVideo.onloadedmetadata = () => {
-                console.log("Local video metadata loaded, playing video...");
-                localVideo.play().catch(err => console.error("Error playing local video:", err));
-            };
+    if (!peer) {
+        try {
+            // Get local video stream for the receiver
+            localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+            document.getElementById("localVideo").srcObject = localStream;
             document.getElementById("videoContainer").classList.remove("d-none");
 
+            // Initialize SimplePeer as receiver
             peer = new SimplePeer({
-                initiator: true,
+                initiator: false,
                 trickle: false,
-                stream: stream,
-                config: {
-                    iceServers: [
-                        { urls: "stun:stun.relay.metered.ca:80" },
-                        { urls: "turn:global.relay.metered.ca:80", username: "7307403595bd6e385297b0c5", credential: "PGPYPmfZWAsp45y" },
-                        { urls: "turn:global.relay.metered.ca:80?transport=tcp", username: "7307403595bd6e385297b0c5", credential: "PGPYPmfZWAsp45y" },
-                        { urls: "turn:global.relay.metered.ca:443", username: "7307403595bd6e385297b0c5", credential: "PGPYPmfZWAsp45y" },
-                        { urls: "turn:global.relay.metered.ca:443?transport=tcp", username: "7307403595bd6e385297b0c5", credential: "PGPYPmfZWAsp45y" },
-                        { urls: "turns:global.relay.metered.ca:443", username: "7307403595bd6e385297b0c5", credential: "PGPYPmfZWAsp45y" },
-                        { urls: "turns:global.relay.metered.ca:443?transport=tcp", username: "7307403595bd6e385297b0c5", credential: "PGPYPmfZWAsp45y" }
-                    ]
-                }
+                stream: localStream
             });
 
             peer.on("signal", data => {
-                console.log(`Sending signal to ${targetUser}:`, data);
-                connection.invoke("SendSignal", targetUser, JSON.stringify(data))
-                    .catch(err => {
-                        console.error("Error sending signal:", err.toString());
-                        alert(`Failed to initiate call to ${targetUser}. They may not be online.`);
-                        callingMessage.remove();
-                        endCall();
-                    });
+                console.log("Sending response signal to " + sender);
+                connection.invoke("SendSignal", sender, JSON.stringify(data)).catch(err => console.error(err));
             });
 
             peer.on("stream", stream => {
-                console.log("Received remote stream:", stream);
-                const remoteVideo = document.getElementById("remoteVideo");
-                remoteVideo.srcObject = stream;
-                remoteVideo.onloadedmetadata = () => {
-                    console.log("Remote video metadata loaded, playing video...");
-                    remoteVideo.play().catch(err => console.error("Error playing remote video:", err));
-                };
-                callingMessage.remove();
-            });
-
-            peer.on("connect", () => {
-                console.log("WebRTC connection established successfully");
-            });
-
-            peer.on("ice", candidate => {
-                console.log("ICE candidate on initiator:", candidate);
+                console.log("Received remote stream");
+                document.getElementById("remoteVideo").srcObject = stream;
             });
 
             peer.on("error", err => {
-                console.error("Peer error on initiator:", err);
-                alert("An error occurred during the call: " + err.message);
-                callingMessage.remove();
+                console.error("Peer error:", err);
                 endCall();
             });
 
             peer.on("close", () => {
-                console.log("WebRTC connection closed on initiator");
+                console.log("Peer connection closed");
                 endCall();
             });
 
-            const stopButton = document.createElement("button");
-            stopButton.id = "stopVideoCall";
-            stopButton.className = "btn btn-danger mt-2";
-            stopButton.textContent = "Stop Call";
-            document.getElementById("videoContainer").appendChild(stopButton);
-
-            stopButton.addEventListener("click", function () {
-                endCall();
-                callingMessage.remove();
-                stopButton.remove();
-            });
-        })
-        .catch(err => {
+            // Signal the received data
+            peer.signal(JSON.parse(signalData));
+        } catch (err) {
             console.error("Error accessing media devices:", err);
-            alert("Could not access webcam or microphone. Please check your device and permissions.");
-            callingMessage.remove();
-            isCalling = false;
-            currentCallTarget = null;
-        });
-}
-
-connection.on("ReceiveSignal", function (sender, signalData) {
-    console.log(`Received signal from ${sender}:`, signalData);
-
-    if (isCalling) {
-        console.log(`Ignoring signal from ${sender} because a call is already in progress`);
-        return;
-    }
-
-    const videoContainer = document.getElementById("videoContainer");
-    if (!videoContainer) {
-        console.error("videoContainer not found in the DOM");
-        return;
-    }
-    videoContainer.classList.remove("d-none");
-
-    const existingCallPrompt = document.getElementById("callPrompt");
-    if (existingCallPrompt) {
-        existingCallPrompt.remove();
-    }
-
-    const callPrompt = document.createElement("div");
-    callPrompt.id = "callPrompt";
-    callPrompt.className = "text-center p-3 bg-light border rounded";
-    callPrompt.innerHTML = `
-        <p>Incoming call from ${sender}</p>
-        <button id="acceptCall" class="btn btn-success me-2">Accept</button>
-        <button id="rejectCall" class="btn btn-danger">Reject</button>
-    `;
-    videoContainer.appendChild(callPrompt);
-
-    document.getElementById("acceptCall").addEventListener("click", function () {
-        if (isCalling) {
-            alert("You are already in a call. Please end the current call before accepting a new one.");
-            callPrompt.remove();
-            return;
+            alert("Could not access camera or microphone.");
         }
-
-        isCalling = true;
-        currentCallTarget = sender;
-        callPrompt.remove();
-
-        navigator.mediaDevices.getUserMedia({ video: true, audio: true })
-            .then(stream => {
-                console.log("Local stream obtained successfully for receiver:", stream);
-                localStream = stream;
-                const localVideo = document.getElementById("localVideo");
-                localVideo.srcObject = stream;
-                localVideo.onloadedmetadata = () => {
-                    console.log("Local video metadata loaded for receiver, playing video...");
-                    localVideo.play().catch(err => console.error("Error playing local video:", err));
-                };
-                videoContainer.classList.remove("d-none");
-
-                peer = new SimplePeer({
-                    initiator: false,
-                    trickle: false,
-                    stream: stream,
-                    config: {
-                        iceServers: [
-                            { urls: "stun:stun.relay.metered.ca:80" },
-                            { urls: "turn:global.relay.metered.ca:80", username: "7307403595bd6e385297b0c5", credential: "PGPYPmfZWAsp45y" },
-                            { urls: "turn:global.relay.metered.ca:80?transport=tcp", username: "7307403595bd6e385297b0c5", credential: "PGPYPmfZWAsp45y" },
-                            { urls: "turn:global.relay.metered.ca:443", username: "7307403595bd6e385297b0c5", credential: "PGPYPmfZWAsp45y" },
-                            { urls: "turn:global.relay.metered.ca:443?transport=tcp", username: "7307403595bd6e385297b0c5", credential: "PGPYPmfZWAsp45y" },
-                            { urls: "turns:global.relay.metered.ca:443", username: "7307403595bd6e385297b0c5", credential: "PGPYPmfZWAsp45y" },
-                            { urls: "turns:global.relay.metered.ca:443?transport=tcp", username: "7307403595bd6e385297b0c5", credential: "PGPYPmfZWAsp45y" }
-                        ]
-                    }
-                });
-
-                peer.on("signal", data => {
-                    console.log(`Sending signal back to ${sender}:`, data);
-                    connection.invoke("SendSignal", sender, JSON.stringify(data))
-                        .catch(err => console.error("Error sending signal:", err.toString()));
-                });
-
-                peer.on("stream", stream => {
-                    console.log("Received remote stream for receiver:", stream);
-                    const remoteVideo = document.getElementById("remoteVideo");
-                    remoteVideo.srcObject = stream;
-                    remoteVideo.onloadedmetadata = () => {
-                        console.log("Remote video metadata loaded for receiver, playing video...");
-                        remoteVideo.play().catch(err => console.error("Error playing remote video:", err));
-                    };
-                });
-
-                peer.on("connect", () => {
-                    console.log("WebRTC connection established successfully for receiver");
-                });
-
-                peer.on("ice", candidate => {
-                    console.log("ICE candidate for receiver:", candidate);
-                });
-
-                peer.on("error", err => {
-                    console.error("Peer error for receiver:", err);
-                    alert("An error occurred during the call: " + err.message);
-                    endCall();
-                });
-
-                peer.on("close", () => {
-                    console.log("WebRTC connection closed for receiver");
-                    endCall();
-                });
-
-                const stopButton = document.createElement("button");
-                stopButton.id = "stopVideoCall";
-                stopButton.className = "btn btn-danger mt-2";
-                stopButton.textContent = "Stop Call";
-                videoContainer.appendChild(stopButton);
-
-                stopButton.addEventListener("click", function () {
-                    endCall();
-                    stopButton.remove();
-                });
-
-                try {
-                    console.log("Processing signal data:", signalData);
-                    peer.signal(JSON.parse(signalData));
-                } catch (err) {
-                    console.error("Error processing signal:", err);
-                    alert("Failed to process call signal: " + err.message);
-                    endCall();
-                }
-            })
-            .catch(err => {
-                console.error("Error accessing media devices for receiver:", err);
-                alert("Could not access webcam or microphone. Please check your device and permissions.");
-                isCalling = false;
-                currentCallTarget = null;
-            });
-    });
-
-    document.getElementById("rejectCall").addEventListener("click", function () {
-        callPrompt.remove();
-        videoContainer.classList.add("d-none");
-    });
+    } else {
+        // Handle incoming signal for existing peer
+        peer.signal(JSON.parse(signalData));
+    }
 });
 
-document.getElementById("startVideoCall").addEventListener("click", function () {
-    const targetUser = prompt("Enter username to call:");
-    if (targetUser) {
-        initiateVideoCall(targetUser);
-    }
+connection.on("CallEnded", () => {
+    endCall();
 });
 
 function endCall() {
-    if (currentCallTarget && isConnected) {
-        connection.invoke("SendCallEnded", currentCallTarget)
-            .catch(err => console.error("Error sending CallEnded signal:", err.toString()));
-    }
-
     if (peer) {
         peer.destroy();
         peer = null;
@@ -370,21 +180,15 @@ function endCall() {
     document.getElementById("localVideo").srcObject = null;
     document.getElementById("remoteVideo").srcObject = null;
     document.getElementById("videoContainer").classList.add("d-none");
-
-    const callingMessage = document.getElementById("callingMessage");
-    if (callingMessage) {
-        callingMessage.remove();
-    }
-    const stopButton = document.getElementById("stopVideoCall");
-    if (stopButton) {
-        stopButton.remove();
-    }
-    const callPrompt = document.getElementById("callPrompt");
-    if (callPrompt) {
-        callPrompt.remove();
-    }
-
-    isCalling = false;
-    currentCallTarget = null;
-    console.log("Call ended, state reset: isCalling =", isCalling, "currentCallTarget =", currentCallTarget);
 }
+
+document.getElementById("startVideoCall").addEventListener("click", () => {
+    const targetUser = prompt("Enter username to call:");
+    if (targetUser && targetUser !== currentUser) {
+        startVideoCall(targetUser);
+    } else {
+        alert("Please enter a valid username.");
+    }
+});
+
+startConnection();
