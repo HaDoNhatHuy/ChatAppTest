@@ -10,18 +10,23 @@ let incomingCaller = null;
 let remoteUser = null;
 
 async function startConnection() {
-    try {
-        await connection.start();
-        console.log("SignalR Connected.");
-        await connection.invoke("GetFriends", currentUser);
-        await connection.invoke("GetFriendRequests", currentUser);
-    } catch (err) {
-        console.error(err);
-        setTimeout(startConnection, 5000);
+    if (connection.state === signalR.HubConnectionState.Disconnected) {
+        try {
+            await connection.start();
+            console.log("SignalR Connected.");
+            await connection.invoke("GetFriends", currentUser);
+            await connection.invoke("GetFriendRequests", currentUser);
+        } catch (err) {
+            console.error(err);
+            setTimeout(startConnection, 5000);
+        }
+    } else {
+        console.log(`SignalR connection is in ${connection.state} state. Skipping start.`);
     }
 }
 
 connection.onclose(async () => {
+    console.log("SignalR connection closed. Attempting to reconnect...");
     await startConnection();
 });
 
@@ -116,6 +121,14 @@ connection.on("FriendRequestDeclined", (decliner) => {
     connection.invoke("GetFriendRequests", currentUser).catch(err => console.error(err));
 });
 
+connection.on("ReceiveError", (message) => {
+    alert(message);
+});
+
+connection.on("ReceiveSuccess", (message) => {
+    alert(message);
+});
+
 document.getElementById("searchUser").addEventListener("input", async () => {
     const query = document.getElementById("searchUser").value.trim();
     if (query) {
@@ -140,7 +153,7 @@ document.getElementById("searchUser").addEventListener("input", async () => {
     }
 });
 
-document.getElementById("sendButton").addEventListener("click", () => {
+document.getElement AElement("sendButton").addEventListener("click", () => {
     const message = document.getElementById("messageInput").value.trim();
     if (message && currentFriend) {
         connection.invoke("SendMessage", currentUser, currentFriend, message).catch(err => console.error(err));

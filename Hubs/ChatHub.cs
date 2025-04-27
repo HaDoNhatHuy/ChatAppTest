@@ -50,10 +50,10 @@ namespace HermesChatApp.Hubs
                 .Select(f => f.UserId == user.Id ? f.FriendId : f.FriendId == user.Id ? f.UserId : 0)
                 .ToList();
 
-            var friendUsernames = friends.Select(f => _context.Users.Find(f).Username).ToList();
+            var friendUsernames = friends.Select(f => _context.Users.FirstOrDefault(u => u.Id == f)?.Username).ToList();
             foreach (var friend in friendUsernames)
             {
-                if (_userConnections.TryGetValue(friend, out var friendConnectionId))
+                if (friend != null && _userConnections.TryGetValue(friend, out var friendConnectionId))
                 {
                     await Clients.Client(friendConnectionId).SendAsync("ReceiveUserStatus", username, isOnline);
                 }
@@ -66,7 +66,8 @@ namespace HermesChatApp.Hubs
             var receiverUser = _context.Users.FirstOrDefault(u => u.Username == receiver);
             if (senderUser == null || receiverUser == null)
             {
-                throw new HubException("Sender or receiver not found.");
+                await Clients.Caller.SendAsync("ReceiveError", "Sender or receiver not found.");
+                return;
             }
 
             var msg = new Message
@@ -97,7 +98,8 @@ namespace HermesChatApp.Hubs
             var friendEntity = _context.Users.FirstOrDefault(u => u.Username == friend);
             if (currentUserEntity == null || friendEntity == null)
             {
-                throw new HubException("User or friend not found.");
+                await Clients.Caller.SendAsync("ReceiveError", "User or friend not found.");
+                return;
             }
 
             var messages = _context.Messages
@@ -105,12 +107,17 @@ namespace HermesChatApp.Hubs
                     (m.SenderId == currentUserEntity.Id && m.ReceiverId == friendEntity.Id) ||
                     (m.SenderId == friendEntity.Id && m.ReceiverId == currentUserEntity.Id))
                 .OrderBy(m => m.Timestamp)
-                .Take(50);
+                .Take(50)
+                .ToList();
 
             foreach (var msg in messages)
             {
-                var sender = _context.Users.Find(msg.SenderId).Username;
-                await Clients.Caller.SendAsync("ReceiveMessage", sender, msg.Content, friend);
+                var sender = _context.Users.FirstOrDefault(u => u.Id == msg.SenderId)?.Username;
+                var receiver = _context.Users.FirstOrDefault(u => u.Id == msg.ReceiverId)?.Username;
+                if (sender != null && receiver != null)
+                {
+                    await Clients.Caller.SendAsync("ReceiveMessage", sender, msg.Content, receiver);
+                }
             }
         }
 
@@ -120,15 +127,34 @@ namespace HermesChatApp.Hubs
             var receiverUser = _context.Users.FirstOrDefault(u => u.Username == receiver);
             if (senderUser == null || receiverUser == null)
             {
-                throw new HubException("Sender or receiver not found.");
+                await Clients.Caller.SendAsync("ReceiveError", "Sender or receiver not found.");
+                return;
             }
 
             var existingFriendship = _context.Friendships.FirstOrDefault(f =>
                 (f.UserId == senderUser.Id && f.FriendId == receiverUser.Id) ||
                 (f.UserId == receiverUser.Id && f.FriendId == senderUser.Id));
+
             if (existingFriendship != null)
             {
-                throw new HubException("Friendship already exists.");
+                if (existingFriendship.Status == "Accepted")
+                {
+                    await Clients.Caller.SendAsync("ReceiveError", $"{receiver} is already your friend.");
+                    return;
+                }
+                else if (existingFriendship.Status == "Pending")
+                {
+                    if (existingFriendship.UserId == senderUser.Id)
+                    {
+                        await Clients.Caller.SendAsync("ReceiveError", $"You have already sent a friend request to {receiver}.");
+                        return;
+                    }
+                    else
+                    {
+                        await Clients.Caller.SendAsync("ReceiveError", $"{receiver} has already sent you a friend request.");
+                        return;
+                    }
+                }
             }
 
             var friendship = new Friendship
@@ -145,6 +171,8 @@ namespace HermesChatApp.Hubs
             {
                 await Clients.Client(receiverConnectionId).SendAsync("ReceiveFriendRequest", sender);
             }
+
+            await Clients.Caller.SendAsync("ReceiveSuccess", $"Friend request sent to {receiver}.");
         }
 
         public async Task AcceptFriendRequest(string accepter, string requester)
@@ -153,14 +181,16 @@ namespace HermesChatApp.Hubs
             var requesterUser = _context.Users.FirstOrDefault(u => u.Username == requester);
             if (accepterUser == null || requesterUser == null)
             {
-                throw new HubException("User or requester not found.");
+                await Clients.Caller.SendAsync("ReceiveError", "User or requester not found.");
+                return;
             }
 
             var friendship = _context.Friendships.FirstOrDefault(f =>
                 f.UserId == requesterUser.Id && f.FriendId == accepterUser.Id && f.Status == "Pending");
             if (friendship == null)
             {
-                throw new HubException("Friend request not found.");
+                await Clients.Caller.SendAsync("ReceiveError", "Friend request not found.");
+                return;
             }
 
             friendship.Status = "Accepted";
@@ -187,14 +217,16 @@ namespace HermesChatApp.Hubs
             var requesterUser = _context.Users.FirstOrDefault(u => u.Username == requester);
             if (declinerUser == null || requesterUser == null)
             {
-                throw new HubException("User or requester not found.");
+                await Clients.Caller.SendAsync("ReceiveError", "User or requester not found.");
+                return;
             }
 
             var friendship = _context.Friendships.FirstOrDefault(f =>
                 f.UserId == requesterUser.Id && f.FriendId == declinerUser.Id && f.Status == "Pending");
             if (friendship == null)
             {
-                throw new HubException("Friend request not found.");
+                await Clients.Caller.SendAsync("ReceiveError", "Friend request not found.");
+                return;
             }
 
             _context.Friendships.Remove(friendship);
@@ -212,7 +244,8 @@ namespace HermesChatApp.Hubs
             var user = _context.Users.FirstOrDefault(u => u.Username == username);
             if (user == null)
             {
-                throw new HubException("User not found.");
+                await Clients.Caller.SendAsync("ReceiveError", "User not found.");
+                return;
             }
 
             var friends = _context.Friendships
@@ -220,7 +253,7 @@ namespace HermesChatApp.Hubs
                 .Select(f => f.UserId == user.Id ? f.FriendId : f.FriendId == user.Id ? f.UserId : 0)
                 .ToList();
 
-            var friendUsernames = friends.Select(f => _context.Users.Find(f).Username).ToList();
+            var friendUsernames = friends.Select(f => _context.Users.FirstOrDefault(u => u.Id == f)?.Username).ToList();
             var friendStatuses = friendUsernames.ToDictionary(
                 friend => friend,
                 friend => _userConnections.ContainsKey(friend)
@@ -233,13 +266,24 @@ namespace HermesChatApp.Hubs
             var user = _context.Users.FirstOrDefault(u => u.Username == username);
             if (user == null)
             {
-                throw new HubException("User not found.");
+                await Clients.Caller.SendAsync("ReceiveError", "User not found.");
+                return;
             }
 
-            var requests = _context.Friendships
+            var requestUserIds = _context.Friendships
                 .Where(f => f.FriendId == user.Id && f.Status == "Pending")
-                .Select(f => _context.Users.Find(f.UserId).Username)
+                .Select(f => f.UserId)
                 .ToList();
+
+            var requests = new List<string>();
+            foreach (var userId in requestUserIds)
+            {
+                var requester = _context.Users.FirstOrDefault(u => u.Id == userId);
+                if (requester != null)
+                {
+                    requests.Add(requester.Username);
+                }
+            }
 
             await Clients.Caller.SendAsync("ReceiveFriendRequests", requests);
         }
@@ -249,7 +293,8 @@ namespace HermesChatApp.Hubs
             var sender = _userConnections.FirstOrDefault(x => x.Value == Context.ConnectionId).Key;
             if (string.IsNullOrEmpty(sender))
             {
-                throw new HubException("Sender not found.");
+                await Clients.Caller.SendAsync("ReceiveError", "Sender not found.");
+                return;
             }
 
             if (_userConnections.TryGetValue(targetUser, out var targetConnectionId))
@@ -259,7 +304,7 @@ namespace HermesChatApp.Hubs
             }
             else
             {
-                throw new HubException($"User {targetUser} not found or not online.");
+                await Clients.Caller.SendAsync("ReceiveError", $"User {targetUser} not found or not online.");
             }
         }
 
@@ -268,7 +313,8 @@ namespace HermesChatApp.Hubs
             var sender = _userConnections.FirstOrDefault(x => x.Value == Context.ConnectionId).Key;
             if (string.IsNullOrEmpty(sender))
             {
-                throw new HubException("Sender not found.");
+                await Clients.Caller.SendAsync("ReceiveError", "Sender not found.");
+                return;
             }
 
             if (_userConnections.TryGetValue(targetUser, out var targetConnectionId))
@@ -277,7 +323,7 @@ namespace HermesChatApp.Hubs
             }
             else
             {
-                throw new HubException($"User {targetUser} not found or not online.");
+                await Clients.Caller.SendAsync("ReceiveError", $"User {targetUser} not found or not online.");
             }
         }
     }
