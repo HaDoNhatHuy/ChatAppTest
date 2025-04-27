@@ -10,19 +10,16 @@ let incomingCaller = null;
 let remoteUser = null;
 let typingTimeout = null;
 
-document.addEventListener("DOMContentLoaded", () => {
-    const savedFriend = localStorage.getItem("currentFriend");
-    if (savedFriend) {
-        currentFriend = savedFriend;
-        document.getElementById("chat-intro").textContent = `Chat with ${currentFriend}`;
-        document.getElementById("messagesList").innerHTML = "";
-        document.getElementById("loadingSpinner").style.display = "block";
-        connection.invoke("LoadMessages", currentUser, currentFriend).catch(err => {
-            console.error("Error loading messages:", err);
-        }).finally(() => {
-            document.getElementById("loadingSpinner").style.display = "none";
-        });
-    }
+// Đảm bảo DOM được tải hoàn toàn trước khi chạy mã
+document.addEventListener("DOMContentLoaded", async () => {
+    console.log("DOM loaded, initializing chat...");
+
+    // Xóa currentFriend khỏi localStorage khi tải trang để không tự động mở cuộc trò chuyện
+    localStorage.removeItem("currentFriend");
+    console.log("Cleared currentFriend from localStorage on page load");
+
+    // Đợi kết nối SignalR trước khi tải danh sách bạn bè
+    await startConnection();
 });
 
 async function startConnection() {
@@ -39,19 +36,28 @@ async function startConnection() {
         await connection.invoke("GetUnreadCounts", currentUser);
     } catch (err) {
         console.error("Error starting SignalR connection:", err);
+        alert("Failed to connect to the server. Retrying in 5 seconds...");
         setTimeout(startConnection, 5000);
     }
 }
 
 connection.onclose(async (error) => {
     console.log("SignalR connection closed. Error:", error);
-    console.log("Attempting to reconnect...");
+    alert("Lost connection to the server. Attempting to reconnect...");
     await startConnection();
 });
 
 connection.on("ReceiveMessage", (sender, message, receiver, messageType = "Text", fileUrl = null, isPinned = false, messageId, timestamp) => {
+    console.log(`Received message: Sender=${sender}, Receiver=${receiver}, Content=${message}, Type=${messageType}, ID=${messageId}, Timestamp=${timestamp}`);
+    console.log(`Current user: ${currentUser}, Current friend: ${currentFriend}`);
+
     if ((sender === currentFriend && receiver === currentUser) || (sender === currentUser && receiver === currentFriend)) {
         const messagesList = document.getElementById("messagesList");
+        if (!messagesList) {
+            console.error("Messages list element not found!");
+            return;
+        }
+
         const lastMessage = messagesList.lastElementChild;
         const messageDate = new Date(timestamp);
         const messageDateString = messageDate.toLocaleDateString();
@@ -101,27 +107,42 @@ connection.on("ReceiveMessage", (sender, message, receiver, messageType = "Text"
         if (sender === currentFriend && receiver === currentUser) {
             connection.invoke("MarkMessagesAsRead", currentUser, currentFriend);
         }
+    } else {
+        // Lưu tin nhắn vào localStorage để hiển thị sau khi chọn bạn bè
+        const pendingMessages = JSON.parse(localStorage.getItem("pendingMessages") || "{}");
+        if (!pendingMessages[sender]) {
+            pendingMessages[sender] = [];
+        }
+        pendingMessages[sender].push({ sender, message, receiver, messageType, fileUrl, isPinned, messageId, timestamp });
+        localStorage.setItem("pendingMessages", JSON.stringify(pendingMessages));
     }
     connection.invoke("GetUnreadCounts", currentUser);
 });
 
 connection.on("ReceiveNewMessageNotification", (sender) => {
+    console.log(`New message notification from ${sender}`);
     if (sender !== currentFriend) {
-        if (Notification.permission === "granted") {
-            new Notification(`New message from ${sender}`, {
-                body: "You have a new message!",
-                icon: "/images/avatars/default.jpg"
-            });
-        } else if (Notification.permission !== "denied") {
-            Notification.requestPermission().then(permission => {
-                if (permission === "granted") {
-                    new Notification(`New message from ${sender}`, {
-                        body: "You have a new message!",
-                        icon: "/images/avatars/default.jpg"
-                    });
+        const notification = new Notification(`New message from ${sender}`, {
+            body: "You have a new message!",
+            icon: "/images/avatars/default.jpg"
+        });
+        notification.onclick = () => {
+            currentFriend = sender;
+            localStorage.setItem("currentFriend", currentFriend);
+            document.getElementById("chat-intro").textContent = `Chat with ${sender}`;
+            document.getElementById("messagesList").innerHTML = "";
+            const loadingSpinner = document.getElementById("loadingSpinner");
+            if (loadingSpinner) {
+                loadingSpinner.style.display = "block";
+            }
+            connection.invoke("LoadMessages", currentUser, sender).catch(err => {
+                console.error("Error loading messages:", err);
+            }).finally(() => {
+                if (loadingSpinner) {
+                    loadingSpinner.style.display = "none";
                 }
             });
-        }
+        };
     }
 });
 
@@ -136,17 +157,24 @@ connection.on("MessagePinned", (messageId, isPinned) => {
 
 connection.on("ReceiveTyping", (sender) => {
     if (sender === currentFriend) {
-        document.getElementById("typingIndicator").style.display = "block";
+        const typingIndicator = document.getElementById("typingIndicator");
+        if (typingIndicator) {
+            typingIndicator.style.display = "block";
+        }
     }
 });
 
 connection.on("ReceiveStopTyping", (sender) => {
     if (sender === currentFriend) {
-        document.getElementById("typingIndicator").style.display = "none";
+        const typingIndicator = document.getElementById("typingIndicator");
+        if (typingIndicator) {
+            typingIndicator.style.display = "none";
+        }
     }
 });
 
 connection.on("ReceiveUnreadCounts", (unreadCounts) => {
+    console.log("Unread counts:", unreadCounts);
     const friendList = document.getElementById("friendList").getElementsByTagName("li");
     for (let item of friendList) {
         const username = item.dataset.username;
@@ -202,11 +230,27 @@ connection.on("ReceiveFriends", (friends, friendStatuses) => {
             localStorage.setItem("currentFriend", currentFriend);
             document.getElementById("chat-intro").textContent = `Chat with ${friend}`;
             document.getElementById("messagesList").innerHTML = "";
-            document.getElementById("loadingSpinner").style.display = "block";
+            const loadingSpinner = document.getElementById("loadingSpinner");
+            if (loadingSpinner) {
+                loadingSpinner.style.display = "block";
+            }
+
+            // Hiển thị tin nhắn pending từ localStorage
+            const pendingMessages = JSON.parse(localStorage.getItem("pendingMessages") || "{}");
+            if (pendingMessages[friend]) {
+                pendingMessages[friend].forEach(msg => {
+                    connection.invoke("ReceiveMessage", msg.sender, msg.message, msg.receiver, msg.messageType, msg.fileUrl, msg.isPinned, msg.messageId, msg.timestamp);
+                });
+                delete pendingMessages[friend];
+                localStorage.setItem("pendingMessages", JSON.stringify(pendingMessages));
+            }
+
             connection.invoke("LoadMessages", currentUser, friend).catch(err => {
                 console.error("Error loading messages:", err);
             }).finally(() => {
-                document.getElementById("loadingSpinner").style.display = "none";
+                if (loadingSpinner) {
+                    loadingSpinner.style.display = "none";
+                }
             });
         };
         friendList.appendChild(li);
@@ -522,5 +566,3 @@ document.getElementById("startVideoCall").addEventListener("click", () => {
 document.getElementById("endCallButton").addEventListener("click", () => {
     endCall();
 });
-
-startConnection();
