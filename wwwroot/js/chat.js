@@ -9,28 +9,25 @@ let localStream = null;
 let incomingCaller = null;
 let remoteUser = null;
 let typingTimeout = null;
-let oldestMessageId = null; // Lưu ID của tin nhắn cũ nhất đã tải
-let isLoadingMessages = false; // Trạng thái đang tải tin nhắn cũ
+let oldestMessageId = null;
+let isLoadingMessages = false;
 
 // Đảm bảo DOM được tải hoàn toàn trước khi chạy mã
 document.addEventListener("DOMContentLoaded", async () => {
     console.log("DOM loaded, initializing chat...");
 
-    // Xóa currentFriend khỏi localStorage khi tải trang để không tự động mở cuộc trò chuyện
     localStorage.removeItem("currentFriend");
     console.log("Cleared currentFriend from localStorage on page load");
 
-    // Đợi kết nối SignalR trước khi tải danh sách bạn bè
     await startConnection();
 
-    // Thêm sự kiện cuộn cho messagesList để tải tin nhắn cũ
     const messagesList = document.getElementById("messagesList");
     messagesList.addEventListener("scroll", async () => {
         if (messagesList.scrollTop === 0 && !isLoadingMessages && oldestMessageId) {
             isLoadingMessages = true;
             const loadingSpinner = document.getElementById("loadingSpinner");
             if (loadingSpinner) {
-                loadingSpinner.style.display = "block";
+                loadingSpinner.classList.add("active");
             }
 
             try {
@@ -40,21 +37,19 @@ document.addEventListener("DOMContentLoaded", async () => {
             } finally {
                 isLoadingMessages = false;
                 if (loadingSpinner) {
-                    loadingSpinner.style.display = "none";
+                    loadingSpinner.classList.remove("active");
                 }
             }
         }
 
-        // Hiển thị nút "Xuống dưới" khi cuộn lên
         const scrollToBottomBtn = document.getElementById("scrollToBottomBtn");
         if (messagesList.scrollTop + messagesList.clientHeight < messagesList.scrollHeight - 50) {
-            scrollToBottomBtn.style.display = "block";
+            scrollToBottomBtn.classList.add("active");
         } else {
-            scrollToBottomBtn.style.display = "none";
+            scrollToBottomBtn.classList.remove("active");
         }
     });
 
-    // Thêm sự kiện cho nút "Xuống dưới"
     document.getElementById("scrollToBottomBtn").addEventListener("click", () => {
         messagesList.scrollTop = messagesList.scrollHeight;
     });
@@ -62,16 +57,25 @@ document.addEventListener("DOMContentLoaded", async () => {
 
 async function startConnection() {
     try {
+        if (connection.state === signalR.HubConnectionState.Connected) {
+            console.log("SignalR connection already established.");
+            return;
+        }
+
         if (connection.state !== signalR.HubConnectionState.Disconnected) {
             console.log(`SignalR connection is in ${connection.state} state. Stopping current connection...`);
             await connection.stop();
         }
+
         console.log("Attempting to start SignalR connection...");
         await connection.start();
         console.log("SignalR Connected.");
-        await connection.invoke("GetFriends", currentUser);
-        await connection.invoke("GetFriendRequests", currentUser);
-        await connection.invoke("GetUnreadCounts", currentUser);
+
+        await Promise.all([
+            connection.invoke("GetFriends", currentUser),
+            connection.invoke("GetFriendRequests", currentUser),
+            connection.invoke("GetUnreadCounts", currentUser)
+        ]);
     } catch (err) {
         console.error("Error starting SignalR connection:", err);
         alert("Failed to connect to the server. Retrying in 5 seconds...");
@@ -131,15 +135,17 @@ connection.on("ReceiveMessage", (sender, message, receiver, messageType = "Text"
         `;
         messagesList.appendChild(li);
 
-        // Cập nhật oldestMessageId nếu đây là tin nhắn đầu tiên hoặc tin nhắn cũ hơn
         if (!oldestMessageId || messageId < oldestMessageId) {
             oldestMessageId = messageId;
         }
 
-        // Tự động cuộn xuống tin nhắn mới nhất nếu người dùng đang ở gần dưới cùng
-        const isNearBottom = messagesList.scrollTop + messagesList.clientHeight >= messagesList.scrollHeight - 50;
-        if (isNearBottom || sender === currentUser) {
+        if (sender === currentUser) {
             messagesList.scrollTop = messagesList.scrollHeight;
+        } else {
+            const isNearBottom = messagesList.scrollTop + messagesList.clientHeight >= messagesList.scrollHeight - 50;
+            if (isNearBottom) {
+                messagesList.scrollTop = messagesList.scrollHeight;
+            }
         }
 
         li.querySelector(".pin-button").addEventListener("click", () => {
@@ -154,7 +160,6 @@ connection.on("ReceiveMessage", (sender, message, receiver, messageType = "Text"
             connection.invoke("MarkMessagesAsRead", currentUser, currentFriend);
         }
     } else {
-        // Lưu tin nhắn vào localStorage để hiển thị sau khi chọn bạn bè
         const pendingMessages = JSON.parse(localStorage.getItem("pendingMessages") || "{}");
         if (!pendingMessages[sender]) {
             pendingMessages[sender] = [];
@@ -174,13 +179,12 @@ connection.on("ReceiveOlderMessages", (messages) => {
     }
 
     const currentScrollHeight = messagesList.scrollHeight;
-    messages.sort((a, b) => new Date(a.Timestamp) - new Date(b.Timestamp)); // Sắp xếp tin nhắn theo thời gian
+    messages.sort((a, b) => new Date(a.Timestamp) - new Date(b.Timestamp));
 
     messages.forEach(msg => {
         const messageDate = new Date(msg.Timestamp);
         const messageDateString = messageDate.toLocaleDateString();
 
-        // Kiểm tra xem có cần thêm divider không
         const firstMessage = messagesList.firstElementChild;
         let firstMessageDateString = null;
         if (firstMessage && firstMessage.dataset.timestamp) {
@@ -215,7 +219,6 @@ connection.on("ReceiveOlderMessages", (messages) => {
         `;
         messagesList.insertBefore(li, messagesList.firstChild);
 
-        // Cập nhật oldestMessageId
         if (!oldestMessageId || msg.Id < oldestMessageId) {
             oldestMessageId = msg.Id;
         }
@@ -229,7 +232,6 @@ connection.on("ReceiveOlderMessages", (messages) => {
         });
     });
 
-    // Giữ vị trí cuộn sau khi thêm tin nhắn cũ
     messagesList.scrollTop = messagesList.scrollHeight - currentScrollHeight;
 });
 
@@ -247,13 +249,13 @@ connection.on("ReceiveNewMessageNotification", (sender) => {
             document.getElementById("messagesList").innerHTML = "";
             const loadingSpinner = document.getElementById("loadingSpinner");
             if (loadingSpinner) {
-                loadingSpinner.style.display = "block";
+                loadingSpinner.classList.add("active");
             }
             connection.invoke("LoadMessages", currentUser, sender).catch(err => {
                 console.error("Error loading messages:", err);
             }).finally(() => {
                 if (loadingSpinner) {
-                    loadingSpinner.style.display = "none";
+                    loadingSpinner.classList.remove("active");
                 }
             });
         };
@@ -316,7 +318,7 @@ connection.on("ReceiveUserStatus", (username, isOnline) => {
             const offlineSpan = item.querySelector(".last-offline");
             dot.className = `status-dot ${isOnline ? "online" : "offline"}`;
             if (isOnline) {
-                offlineSpan.textContent = ""; // Ẩn dòng chữ "Offline ..." khi online
+                offlineSpan.textContent = "";
             } else {
                 connection.invoke("GetLastOnline", currentUser, username).catch(err => console.error("Error getting last online:", err));
             }
@@ -346,13 +348,12 @@ connection.on("ReceiveFriends", (friends, friendStatuses) => {
             localStorage.setItem("currentFriend", currentFriend);
             document.getElementById("chat-intro").textContent = `Chat with ${friend}`;
             document.getElementById("messagesList").innerHTML = "";
-            oldestMessageId = null; // Reset oldestMessageId khi chuyển sang bạn bè mới
+            oldestMessageId = null;
             const loadingSpinner = document.getElementById("loadingSpinner");
             if (loadingSpinner) {
-                loadingSpinner.style.display = "block";
+                loadingSpinner.classList.add("active");
             }
 
-            // Hiển thị tin nhắn pending từ localStorage
             const pendingMessages = JSON.parse(localStorage.getItem("pendingMessages") || "{}");
             if (pendingMessages[friend]) {
                 pendingMessages[friend].forEach(msg => {
@@ -366,8 +367,10 @@ connection.on("ReceiveFriends", (friends, friendStatuses) => {
                 console.error("Error loading messages:", err);
             }).finally(() => {
                 if (loadingSpinner) {
-                    loadingSpinner.style.display = "none";
+                    loadingSpinner.classList.remove("active");
                 }
+                const messagesList = document.getElementById("messagesList");
+                messagesList.scrollTop = messagesList.scrollHeight;
             });
         };
         friendList.appendChild(li);
@@ -394,15 +397,22 @@ connection.on("ReceiveFriendRequests", (requests) => {
 
 connection.on("ReceiveFriendRequest", (sender) => {
     document.getElementById("friendRequestSender").textContent = sender;
-    document.getElementById("friendRequestModal").classList.remove("d-none");
+    const friendRequestModal = document.getElementById("friendRequestModal");
+    if (friendRequestModal) {
+        friendRequestModal.classList.remove("d-none");
+    }
 
     document.getElementById("acceptFriendRequestButton").onclick = () => {
-        document.getElementById("friendRequestModal").classList.add("d-none");
+        if (friendRequestModal) {
+            friendRequestModal.classList.add("d-none");
+        }
         connection.invoke("AcceptFriendRequest", currentUser, sender).catch(err => console.error(err));
     };
 
     document.getElementById("declineFriendRequestButton").onclick = () => {
-        document.getElementById("friendRequestModal").classList.add("d-none");
+        if (friendRequestModal) {
+            friendRequestModal.classList.add("d-none");
+        }
         connection.invoke("DeclineFriendRequest", currentUser, sender).catch(err => console.error(err));
     };
 });
@@ -436,7 +446,7 @@ connection.on("ReceiveLastOnline", (friend, lastOnline) => {
             if (lastOnline) {
                 const lastOnlineDate = new Date(lastOnline);
                 console.log(`Parsed LastOnline for ${friend}: ${lastOnlineDate}`);
-                updateLastOfflineTime(offlineSpan, lastOnlineDate); // Bỏ điều chỉnh múi giờ
+                updateLastOfflineTime(offlineSpan, lastOnlineDate);
             }
             break;
         }
@@ -446,7 +456,7 @@ connection.on("ReceiveLastOnline", (friend, lastOnline) => {
 function updateLastOfflineTime(element, lastOnline) {
     const now = new Date();
     console.log(`Current time: ${now}, LastOnline: ${lastOnline}`);
-    const diff = Math.round((now - lastOnline) / 60000); // Tính chênh lệch bằng phút
+    const diff = Math.round((now - lastOnline) / 60000);
     if (diff < 1) {
         element.textContent = "Offline just now";
     } else if (diff < 60) {
@@ -546,31 +556,43 @@ document.getElementById("fileInput").addEventListener("change", async () => {
     }
 });
 
-function updateLastOfflineTime(element, lastOnline) {
-    const now = new Date(); // Thời gian hiện tại của client
-    const diff = Math.round((now - lastOnline) / 60000); // Tính chênh lệch bằng phút
-    if (diff < 1) {
-        element.textContent = "Offline just now";
-    } else if (diff < 60) {
-        element.textContent = `Offline ${diff} mins ago`;
-    } else {
-        const hours = Math.round(diff / 60);
-        element.textContent = `Offline ${hours} hours ago`;
-    }
-}
-
 async function startVideoCall(targetUser) {
+    // Kiểm tra nếu đã có cuộc gọi đang diễn ra
+    if (peer || localStream) {
+        alert("A call is already in progress. Please end the current call first.");
+        return;
+    }
+
     if (!currentFriend) {
         alert("Please select a friend to call.");
         return;
     }
 
+    // Kiểm tra trạng thái kết nối SignalR
+    if (connection.state !== signalR.HubConnectionState.Connected) {
+        alert("Cannot start a call because the server connection is not active. Retrying connection...");
+        await startConnection();
+        return;
+    }
+
     try {
         localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
-        document.getElementById("localVideo").srcObject = localStream;
-        document.getElementById("localUserLabel").textContent = currentUser;
-        document.getElementById("remoteUserLabel").textContent = targetUser;
-        document.getElementById("videoContainer").classList.remove("d-none");
+        const localVideo = document.getElementById("localVideo");
+        if (localVideo) {
+            localVideo.srcObject = localStream;
+        }
+        const localUserLabel = document.getElementById("localUserLabel");
+        if (localUserLabel) {
+            localUserLabel.textContent = currentUser;
+        }
+        const remoteUserLabel = document.getElementById("remoteUserLabel");
+        if (remoteUserLabel) {
+            remoteUserLabel.textContent = targetUser;
+        }
+        const videoContainer = document.getElementById("videoContainer");
+        if (videoContainer) {
+            videoContainer.classList.remove("d-none");
+        }
 
         remoteUser = targetUser;
 
@@ -582,12 +604,24 @@ async function startVideoCall(targetUser) {
 
         peer.on("signal", data => {
             console.log("Sending signal to " + targetUser);
-            connection.invoke("SendSignal", targetUser, JSON.stringify(data)).catch(err => console.error(err));
+            if (connection.state === signalR.HubConnectionState.Connected) {
+                connection.invoke("SendSignal", targetUser, JSON.stringify(data)).catch(err => {
+                    console.error("Error sending signal:", err);
+                    alert("Failed to send call signal. Please try again.");
+                    endCall();
+                });
+            } else {
+                alert("Cannot send call signal because the server connection is not active.");
+                endCall();
+            }
         });
 
         peer.on("stream", stream => {
             console.log("Received remote stream");
-            document.getElementById("remoteVideo").srcObject = stream;
+            const remoteVideo = document.getElementById("remoteVideo");
+            if (remoteVideo) {
+                remoteVideo.srcObject = stream;
+            }
         });
 
         peer.on("error", err => {
@@ -604,25 +638,55 @@ async function startVideoCall(targetUser) {
     } catch (err) {
         console.error("Error accessing media devices:", err);
         alert("Unable to access camera or microphone. Please check your permissions or device settings.");
+        endCall();
     }
 }
 
 connection.on("ReceiveSignal", async (sender, signalData) => {
     console.log("Received signal from " + sender);
 
+    // Kiểm tra trạng thái kết nối SignalR
+    if (connection.state !== signalR.HubConnectionState.Connected) {
+        console.error("Cannot process signal because SignalR connection is not active.");
+        return;
+    }
+
     if (!peer) {
         incomingCaller = sender;
-        document.getElementById("callerName").textContent = sender;
-        document.getElementById("callModal").classList.remove("d-none");
+        const callerName = document.getElementById("callerName");
+        if (callerName) {
+            callerName.textContent = sender;
+        }
+        const callModal = document.getElementById("callModal");
+        if (callModal) {
+            callModal.classList.remove("d-none");
+        } else {
+            console.error("Call modal element not found!");
+            return;
+        }
 
         document.getElementById("acceptCallButton").onclick = async () => {
-            document.getElementById("callModal").classList.add("d-none");
+            if (callModal) {
+                callModal.classList.add("d-none");
+            }
             try {
                 localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
-                document.getElementById("localVideo").srcObject = localStream;
-                document.getElementById("localUserLabel").textContent = currentUser;
-                document.getElementById("remoteUserLabel").textContent = sender;
-                document.getElementById("videoContainer").classList.remove("d-none");
+                const localVideo = document.getElementById("localVideo");
+                if (localVideo) {
+                    localVideo.srcObject = localStream;
+                }
+                const localUserLabel = document.getElementById("localUserLabel");
+                if (localUserLabel) {
+                    localUserLabel.textContent = currentUser;
+                }
+                const remoteUserLabel = document.getElementById("remoteUserLabel");
+                if (remoteUserLabel) {
+                    remoteUserLabel.textContent = sender;
+                }
+                const videoContainer = document.getElementById("videoContainer");
+                if (videoContainer) {
+                    videoContainer.classList.remove("d-none");
+                }
 
                 remoteUser = sender;
 
@@ -634,12 +698,24 @@ connection.on("ReceiveSignal", async (sender, signalData) => {
 
                 peer.on("signal", data => {
                     console.log("Sending response signal to " + sender);
-                    connection.invoke("SendSignal", sender, JSON.stringify(data)).catch(err => console.error(err));
+                    if (connection.state === signalR.HubConnectionState.Connected) {
+                        connection.invoke("SendSignal", sender, JSON.stringify(data)).catch(err => {
+                            console.error("Error sending response signal:", err);
+                            alert("Failed to send response signal. Please try again.");
+                            endCall();
+                        });
+                    } else {
+                        alert("Cannot send response signal because the server connection is not active.");
+                        endCall();
+                    }
                 });
 
                 peer.on("stream", stream => {
                     console.log("Received remote stream");
-                    document.getElementById("remoteVideo").srcObject = stream;
+                    const remoteVideo = document.getElementById("remoteVideo");
+                    if (remoteVideo) {
+                        remoteVideo.srcObject = stream;
+                    }
                 });
 
                 peer.on("error", err => {
@@ -662,12 +738,20 @@ connection.on("ReceiveSignal", async (sender, signalData) => {
         };
 
         document.getElementById("declineCallButton").onclick = () => {
-            document.getElementById("callModal").classList.add("d-none");
+            if (callModal) {
+                callModal.classList.add("d-none");
+            }
             connection.invoke("SendCallEnded", sender).catch(err => console.error(err));
             incomingCaller = null;
         };
     } else {
-        peer.signal(JSON.parse(signalData));
+        try {
+            peer.signal(JSON.parse(signalData));
+        } catch (err) {
+            console.error("Error processing signal data:", err);
+            alert("Failed to process call signal. Please try again.");
+            endCall();
+        }
     }
 });
 
@@ -684,12 +768,23 @@ function endCall() {
         localStream.getTracks().forEach(track => track.stop());
         localStream = null;
     }
-    document.getElementById("localVideo").srcObject = null;
-    document.getElementById("remoteVideo").srcObject = null;
-    document.getElementById("videoContainer").classList.add("d-none");
+    const localVideo = document.getElementById("localVideo");
+    if (localVideo) {
+        localVideo.srcObject = null;
+    }
+    const remoteVideo = document.getElementById("remoteVideo");
+    if (remoteVideo) {
+        remoteVideo.srcObject = null;
+    }
+    const videoContainer = document.getElementById("videoContainer");
+    if (videoContainer) {
+        videoContainer.classList.add("d-none");
+    }
     if (incomingCaller || remoteUser) {
         const target = incomingCaller || remoteUser;
-        connection.invoke("SendCallEnded", target).catch(err => console.error(err));
+        if (connection.state === signalR.HubConnectionState.Connected) {
+            connection.invoke("SendCallEnded", target).catch(err => console.error(err));
+        }
         incomingCaller = null;
         remoteUser = null;
     }

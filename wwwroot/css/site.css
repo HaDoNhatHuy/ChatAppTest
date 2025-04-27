@@ -63,6 +63,11 @@
     overflow-y: auto;
     padding: 20px;
     background: url('/images/chat-bg.png') repeat;
+    position: relative; /* Đảm bảo spinner có thể được định vị tuyệt đối */
+}
+
+.messages-list {
+    scroll-behavior: smooth;
 }
 
 .message {
@@ -363,10 +368,23 @@
 }
 
 .loading-spinner {
-    display: none;
+    position: absolute;
+    top: 10px;
+    left: 50%;
+    transform: translateX(-50%);
     text-align: center;
     padding: 10px;
+    background: rgba(255, 255, 255, 0.8);
+    border-radius: 8px;
+    z-index: 10;
+    opacity: 0;
+    transition: opacity 0.3s ease; /* Thêm hiệu ứng fade */
 }
+
+    .loading-spinner.active {
+        opacity: 1;
+        display: block;
+    }
 
     .loading-spinner::before {
         content: "";
@@ -388,6 +406,26 @@
         transform: rotate(360deg);
     }
 }
+
+.scroll-to-bottom {
+    position: absolute;
+    bottom: 20px;
+    right: 20px;
+    border-radius: 50%;
+    width: 40px;
+    height: 40px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    opacity: 0;
+    transition: opacity 0.3s ease;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+}
+
+    .scroll-to-bottom.active {
+        opacity: 1;
+        display: flex;
+    }
 
 .date-divider {
     text-align: center;
@@ -522,76 +560,4 @@ body.dark-mode {
     100% {
         opacity: 0.3;
     }
-}
-
-/* Emoji/Sticker Picker */
-.emoji-picker {
-    position: absolute;
-    bottom: 70px;
-    left: 20px;
-    background: #fff;
-    border: 1px solid #ddd;
-    border-radius: 8px;
-    padding: 10px;
-    display: none;
-    z-index: 10;
-    flex-wrap: wrap;
-    max-width: 300px;
-}
-
-.emoji {
-    font-size: 24px;
-    cursor: pointer;
-    padding: 5px;
-}
-
-    .emoji:hover {
-        background-color: #f0f0f0;
-        border-radius: 5px;
-    }
-
-.sticker {
-    max-width: 100px;
-    height: auto;
-}
-
-/* File/Image Messages */
-.message img,
-.message a.file-link {
-    max-width: 200px;
-    border-radius: 8px;
-    margin-top: 5px;
-}
-
-.message a.file-link {
-    display: block;
-    color: #0084ff;
-    text-decoration: none;
-}
-
-/* Last Offline Time */
-.last-offline {
-    font-size: 0.7rem;
-    color: #888;
-    margin-left: 5px;
-}
-
-/* Tin nhắn được ghim */
-.message.pinned {
-    background-color: #e6f3ff !important;
-    border: 2px solid #0084ff;
-    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-}
-
-/* Nút ghim */
-.pin-button {
-    margin-top: 5px;
-    font-size: 0.8rem;
-    padding: 2px 8px;
-}
-
-/* Chế độ tối cho tin nhắn được ghim */
-.dark-mode .message.pinned {
-    background-color: #3a4a6b !important;
-    border: 2px solid #0a66c2;
 }

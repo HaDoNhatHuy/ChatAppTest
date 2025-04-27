@@ -35,30 +35,6 @@ namespace HermesChatApp.Hubs
             await base.OnConnectedAsync();
         }
 
-        //public override async Task OnDisconnectedAsync(Exception? exception)
-        //{
-        //    try
-        //    {
-        //        var username = _userConnections.FirstOrDefault(x => x.Value == Context.ConnectionId).Key;
-        //        if (username != null)
-        //        {
-        //            var user = await _context.Users.FirstOrDefaultAsync(u => u.Username == username);
-        //            if (user != null)
-        //            {
-        //                user.LastOnline = DateTime.UtcNow;
-        //                _context.Users.Update(user);
-        //                await _context.SaveChangesAsync();
-        //            }
-        //            _userConnections.TryRemove(username, out _);
-        //            await NotifyFriendsOfStatusChange(username, false);
-        //        }
-        //    }
-        //    catch (Exception ex)
-        //    {
-        //        Console.WriteLine($"Error in OnDisconnectedAsync: {ex.Message}");
-        //    }
-        //    await base.OnDisconnectedAsync(exception);
-        //}
         public override async Task OnDisconnectedAsync(Exception? exception)
         {
             try
@@ -218,8 +194,9 @@ namespace HermesChatApp.Hubs
                     .Where(m =>
                         (m.SenderId == currentUserEntity.Id && m.ReceiverId == friendEntity.Id) ||
                         (m.SenderId == friendEntity.Id && m.ReceiverId == currentUserEntity.Id))
-                    .OrderBy(m => m.Timestamp)
-                    .Take(50)
+                    .OrderByDescending(m => m.Timestamp) // Sắp xếp giảm dần để lấy tin nhắn mới nhất trước
+                    .Take(50) // Lấy 50 tin nhắn gần nhất
+                    .OrderBy(m => m.Timestamp) // Sắp xếp lại tăng dần để hiển thị đúng thứ tự
                     .Select(m => new
                     {
                         m.Id,
@@ -696,6 +673,7 @@ namespace HermesChatApp.Hubs
                 await Clients.Caller.SendAsync("ReceiveError", "Failed to end call.");
             }
         }
+
         public async Task LoadOlderMessages(string currentUser, string friend, int oldestMessageId)
         {
             var currentUserEntity = await _context.Users.FirstOrDefaultAsync(u => u.Username == currentUser);
