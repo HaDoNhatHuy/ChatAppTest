@@ -5,77 +5,123 @@
 @section Scripts {
     <script src="~/js/passwordValidation.js"></script>
 }
-<div class="container">
+
+<div class="container my-5">
     <div class="row justify-content-center">
-        <div class="col-md-6">
-            <div class="card shadow-sm">
-                <div class="card-header bg-primary text-white text-center">
-                    <h3>Register</h3>
+        <div class="col-md-8">
+            <div class="card shadow border-0">
+                <div class="card-header bg-gradient text-white text-center py-3" style="background-color: #4361ee;">
+                    <h3 class="mb-0"><i class="fas fa-user-plus me-2"></i>Create Your Account</h3>
                 </div>
-                <div class="card-body">
+                <div class="card-body p-4">
                     @if (ViewBag.Error != null)
                     {
-                        <div class="alert alert-danger text-center">@ViewBag.Error</div>
+                        <div class="alert alert-danger text-center shadow-sm">
+                            <i class="fas fa-exclamation-circle me-2"></i>@ViewBag.Error
+                        </div>
                     }
+
                     <form method="post">
                         <div asp-validation-summary="ModelOnly" class="text-danger"></div>
-                        <div class="mb-3">
-                            <label asp-for="Username" class="form-label">Username</label>
-                            <div class="input-group">
-                                <span class="input-group-text"><i class="fas fa-user"></i></span>
-                                <input asp-for="Username" class="form-control" placeholder="Username" />
+
+                        <div class="row mb-4">
+                            <div class="col-md-6 mb-4 mb-md-0">
+                                <label asp-for="Username" class="form-label fw-bold">Username</label>
+                                <div class="input-group input-group-lg shadow-sm">
+                                    <span class="input-group-text bg-light border-end-0">
+                                        <i class="fas fa-user text-primary"></i>
+                                    </span>
+                                    <input asp-for="Username" class="form-control border-start-0" placeholder="Choose a username" />
+                                </div>
+                                <span asp-validation-for="Username" class="text-danger mt-1"></span>
                             </div>
-                            <span asp-validation-for="Username" class="text-danger"></span>
+
+                            <div class="col-md-6">
+                                <label asp-for="Email" class="form-label fw-bold">Email</label>
+                                <div class="input-group input-group-lg shadow-sm">
+                                    <span class="input-group-text bg-light border-end-0">
+                                        <i class="fas fa-envelope text-primary"></i>
+                                    </span>
+                                    <input asp-for="Email" class="form-control border-start-0" placeholder="Enter your email" />
+                                </div>
+                                <span asp-validation-for="Email" class="text-danger mt-1"></span>
+                            </div>
                         </div>
-                        <div class="mb-3">
-                            <label asp-for="Email" class="form-label">Email</label>
-                            <div class="input-group">
-                                <span class="input-group-text"><i class="fas fa-envelope"></i></span>
-                                <input asp-for="Email" class="form-control" placeholder="Email" />
+
+                        <div class="mb-4">
+                            <label asp-for="PasswordHash" class="form-label fw-bold">Password</label>
+                            <div class="input-group input-group-lg shadow-sm">
+                                <span class="input-group-text bg-light border-end-0">
+                                    <i class="fas fa-lock text-primary"></i>
+                                </span>
+                                <input asp-for="PasswordHash" type="password" class="form-control border-start-0" id="new1Password" placeholder="Create a password" />
                             </div>
-                            <span asp-validation-for="Email" class="text-danger"></span>
-                        </div>
-                        <div class="mb-3">
-                            <label asp-for="PasswordHash" class="form-label">Password</label>
-                            <div class="input-group">
-                                <span class="input-group-text"><i class="fas fa-key"></i></span>
-                                <input asp-for="PasswordHash" type="password" class="form-control" id="new1Password" placeholder="Password" />
-                            </div>
-                            <span asp-validation-for="PasswordHash" class="text-danger"></span>
-                            <div id="pswd_info" class="mt-2">
-                                <h6>Password must meet the following requirements:</h6>
-                                <ul>
-                                    <li id="letter" class="invalid">At least <strong>one lowercase character</strong></li>
-                                    <li id="capital" class="invalid">At least <strong>one uppercase character</strong></li>
-                                    <li id="number" class="invalid">At least <strong>one number</strong></li>
-                                    <li id="length" class="invalid">At least <strong>8 characters</strong></li>
-                                    <li id="special" class="invalid">At least <strong>one special character</strong></li>
+                            <span asp-validation-for="PasswordHash" class="text-danger mt-1"></span>
+
+                            <div id="pswd_info" class="mt-3 p-3 border rounded bg-light">
+                                <h6 class="fw-bold text-primary"><i class="fas fa-shield-alt me-2"></i>Password Requirements:</h6>
+                                <ul class="list-unstyled mb-0">
+                                    <li id="letter" class="invalid"><i class="fas fa-check me-2"></i>At least <strong>one lowercase letter</strong></li>
+                                    <li id="capital" class="invalid"><i class="fas fa-check me-2"></i>At least <strong>one uppercase letter</strong></li>
+                                    <li id="number" class="invalid"><i class="fas fa-check me-2"></i>At least <strong>one number</strong></li>
+                                    <li id="length" class="invalid"><i class="fas fa-check me-2"></i>At least <strong>8 characters</strong></li>
+                                    <li id="special" class="invalid"><i class="fas fa-check me-2"></i>At least <strong>one special character</strong></li>
                                 </ul>
                             </div>
                         </div>
-                        <div class="mb-3">
-                            <label class="form-label">Confirm Password</label>
-                            <div class="input-group">
-                                <span class="input-group-text"><i class="fas fa-key"></i></span>
-                                <input type="password" name="ConfirmPassword" class="form-control" id="new2Password" placeholder="Confirm Password" />
+
+                        <div class="mb-4">
+                            <label class="form-label fw-bold">Confirm Password</label>
+                            <div class="input-group input-group-lg shadow-sm">
+                                <span class="input-group-text bg-light border-end-0">
+                                    <i class="fas fa-lock text-primary"></i>
+                                </span>
+                                <input type="password" name="ConfirmPassword" class="form-control border-start-0" id="new2Password" placeholder="Confirm your password" />
                             </div>
                             <div id="pswd_equal" class="mt-2">
-                                <ul>
-                                    <li id="match" class="invalid">Passwords must match</li>
+                                <ul class="list-unstyled">
+                                    <li id="match" class="invalid"><i class="fas fa-check me-2"></i>Passwords must match</li>
                                 </ul>
                             </div>
                         </div>
-                        <button type="submit" class="btn btn-primary w-100">Register</button>
+
+                        <div class="mb-4 form-check">
+                            <input type="checkbox" class="form-check-input" id="agreeTerms" required>
+                            <label class="form-check-label" for="agreeTerms">
+                                I agree to the <a href="#" class="text-primary">Terms of Service</a> and <a href="#" class="text-primary">Privacy Policy</a>
+                            </label>
+                        </div>
+
+                        <button type="submit" class="btn btn-primary btn-lg w-100 shadow-sm">
+                            <i class="fas fa-user-plus me-2"></i>Create Account
+                        </button>
                     </form>
                 </div>
-                <div class="card-footer text-center">
-                    <a asp-controller="User" asp-action="Login" class="text-primary">Already have an account? Login</a>
+                <div class="card-footer bg-light text-center py-3">
+                    <p class="mb-0">
+                        Already have an account?
+                        <a asp-controller="User" asp-action="Login" class="text-primary fw-bold">Login</a>
+                    </p>
                 </div>
             </div>
         </div>
     </div>
 </div>
+
 <style>
+    .card {
+        border-radius: 15px;
+        overflow: hidden;
+    }
+
+    .input-group-text {
+        border-radius: 10px 0 0 10px;
+    }
+
+    .form-control {
+        border-radius: 0 10px 10px 0;
+    }
+
     .invalid {
         color: #dc3545;
     }
@@ -84,11 +130,17 @@
         color: #28a745;
     }
 
-    .card {
-        border-radius: 10px;
+    .btn-primary {
+        background-color: #4361ee;
+        border-color: #4361ee;
     }
 
-    .input-group-text {
+        .btn-primary:hover {
+            background-color: #3a56d4;
+            border-color: #3a56d4;
+        }
+
+    #pswd_info {
         background-color: #f8f9fa;
     }
 </style>

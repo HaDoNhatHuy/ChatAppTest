@@ -568,7 +568,7 @@ document.getElementById("searchUser").addEventListener("input", async () => {
             div.className = "user-item";
             div.innerHTML = `
                 <span>${user}</span>
-                <button class="btn btn-primary btn-sm">Add Friend</button>
+                <button class="btn btn-primary btn-sm"><i class="fas fa-user-plus"></i></button>
             `;
             div.querySelector("button").onclick = () => {
                 console.log(`Sending friend request from ${currentUser} to ${user}`);

@@ -3,7 +3,7 @@
 }
 @section Css {
     <link href="/css/site.css" rel="stylesheet" />
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" />
 }
 @section Scripts
 {
@@ -14,27 +14,51 @@
     </script>
     <script src="~/js/chat.js"></script>
 }
-<div class="chat-container">
+<div class="chat-container glass-effect">
     <!-- Sidebar Left: Friends -->
     <div class="sidebar left-sidebar">
-        <div class="p-3 border-bottom">
+        <div class="sidebar-header p-3 border-bottom d-flex align-items-center justify-content-between">
             <h5 class="mb-0">Friends</h5>
+            <div class="sidebar-actions">
+                <button id="addFriendBtn" class="btn btn-sm btn-primary rounded-circle" title="Add Friend">
+                    <i class="fas fa-user-plus"></i>
+                </button>
+            </div>
         </div>
         <div class="p-3">
-            <div class="input-group mb-3">
-                <input type="text" id="searchUser" class="form-control rounded-pill" placeholder="Search users..." />
+            <div class="search-container mb-3 position-relative">
+                <input type="text" id="searchUser" class="form-control rounded-pill search-input" placeholder="Search users..." />
+                <i class="fas fa-search search-icon"></i>
             </div>
-            <div id="searchResults" class="mb-3"></div>
-            <div id="friendRequests" class="mb-3"></div>
-            <ul id="friendList" class="list-unstyled mt-3"></ul>
+            <div id="searchResults" class="mb-3 search-results-container"></div>
+
+            <div id="friendRequests" class="mb-3">
+                <h6 class="text-muted mb-2 friend-section-title">Friend Requests</h6>
+                <!-- Friend requests will be populated here -->
+            </div>
+
+            <h6 class="text-muted mb-2 friend-section-title">Online Friends</h6>
+            <ul id="friendList" class="list-unstyled mt-3">
+                <!-- Friends will be populated here -->
+            </ul>
         </div>
     </div>
 
     <!-- Chat Area -->
     <div class="chat-area">
         <div class="chat-header p-3 border-bottom d-flex align-items-center">
-            <h5 class="mb-0 flex-grow-1" id="chat-intro">Select a friend to start chatting</h5>
-            <button id="startVideoCall" class="btn btn-success rounded-circle ms-2"><i class="fas fa-video"></i></button>
+            <div class="chat-user-info d-flex align-items-center flex-grow-1">
+                <div class="user-avatar me-2">
+                    <img id="chatUserAvatar" src="/images/avatars/Mary.jpg" class="rounded-circle" alt="User" width="32" height="32">
+                    <span id="chatUserStatus" class="status-dot online"></span>
+                </div>
+                <h5 class="mb-0" id="chat-intro">Select a friend to start chatting</h5>
+            </div>
+            <div class="chat-actions">
+                <button id="startVideoCall" class="btn btn-primary rounded-circle ms-2" title="Start Video Call">
+                    <i class="fas fa-video"></i>
+                </button>
+            </div>
         </div>
         <div class="messages p-3 position-relative">
             <div id="loadingSpinner" class="loading-spinner"></div>
@@ -45,24 +69,33 @@
             </button>
         </div>
         <div class="input-area p-3 border-top d-flex align-items-center">
-            <button id="emojiButton" class="btn btn-outline-secondary rounded-circle me-2"><i class="fas fa-smile"></i></button>
-            <div class="emoji-picker" id="emojiPicker" style="display: none;">
-                <span class="emoji" data-emoji="😊">😊</span>
-                <span class="emoji" data-emoji="😂">😂</span>
-                <span class="emoji" data-emoji="❤️">❤️</span>
-                <span class="emoji" data-emoji="👍">👍</span>
-                <span class="emoji" data-emoji="😢">😢</span>
-                <span class="emoji" data-emoji="😡">😡</span>
-                <span class="emoji" data-emoji="🎉">🎉</span>
-                <span class="emoji" data-emoji="🚀">🚀</span>
+            <div class="message-input-wrapper d-flex align-items-center w-100">
+                <button id="emojiButton" class="input-action-button" title="Add Emoji">
+                    <i class="fas fa-smile"></i>
+                </button>
+                <div class="emoji-picker" id="emojiPicker" style="display: none;">
+                    <span class="emoji" data-emoji="😊">😊</span>
+                    <span class="emoji" data-emoji="😂">😂</span>
+                    <span class="emoji" data-emoji="❤️">❤️</span>
+                    <span class="emoji" data-emoji="👍">👍</span>
+                    <span class="emoji" data-emoji="😢">😢</span>
+                    <span class="emoji" data-emoji="😡">😡</span>
+                    <span class="emoji" data-emoji="🎉">🎉</span>
+                    <span class="emoji" data-emoji="🚀">🚀</span>
+                </div>
+                <input type="file" id="fileInput" class="d-none" accept="image/*,.pdf,.doc,.docx" />
+                <button id="fileButton" class="input-action-button" title="Attach File">
+                    <i class="fas fa-paperclip"></i>
+                </button>
+                <textarea id="messageInput" class="form-control rounded-pill message-textarea" placeholder="Type a message..." rows="1"></textarea>
+                <button id="sendButton" class="input-action-button send-button">
+                    <i class="fas fa-paper-plane"></i>
+                </button>
             </div>
-            <input type="file" id="fileInput" class="d-none" accept="image/*,.pdf,.doc,.docx" />
-            <button id="fileButton" class="btn btn-outline-secondary rounded-circle me-2"><i class="fas fa-paperclip"></i></button>
-            <textarea id="messageInput" class="form-control rounded-pill me-2" placeholder="Type a message..." rows="1"></textarea>
-            <button id="sendButton" class="btn btn-primary rounded-circle"><i class="fas fa-paper-plane"></i></button>
         </div>
+
         <!-- Video Container and Modals -->
-        <div id="videoContainer" class="video-container d-none p-3 bg-dark">
+        <div id="videoContainer" class="video-container d-none">
             <div class="video-wrapper">
                 <div class="remote-video-container">
                     <video id="remoteVideo" autoplay class="remote-video"></video>
@@ -74,26 +107,48 @@
                 </div>
             </div>
             <div class="video-controls">
+                <button id="toggleMuteButton" class="btn btn-light rounded-circle video-control-btn me-2" title="Mute/Unmute">
+                    <i class="fas fa-microphone"></i>
+                </button>
+                <button id="toggleVideoButton" class="btn btn-light rounded-circle video-control-btn me-2" title="Turn Camera On/Off">
+                    <i class="fas fa-video"></i>
+                </button>
                 <button id="endCallButton" class="btn btn-danger rounded-pill">End Call</button>
             </div>
         </div>
+
         <!-- Incoming Call Modal -->
         <div id="callModal" class="call-modal d-none">
             <div class="call-modal-content">
+                <div class="calling-animation mb-3">
+                    <i class="fas fa-phone-volume fa-pulse fa-2x"></i>
+                </div>
                 <h5>Incoming call from <span id="callerName"></span></h5>
                 <div class="call-buttons">
-                    <button id="acceptCallButton" class="btn btn-success rounded-pill">Accept</button>
-                    <button id="declineCallButton" class="btn btn-danger rounded-pill">Decline</button>
+                    <button id="acceptCallButton" class="btn btn-success rounded-pill">
+                        <i class="fas fa-phone-alt me-2"></i>Accept
+                    </button>
+                    <button id="declineCallButton" class="btn btn-danger rounded-pill">
+                        <i class="fas fa-phone-slash me-2"></i>Decline
+                    </button>
                 </div>
             </div>
         </div>
+
         <!-- Friend Request Modal -->
         <div id="friendRequestModal" class="call-modal d-none">
             <div class="call-modal-content">
+                <div class="request-animation mb-3">
+                    <i class="fas fa-user-plus fa-2x"></i>
+                </div>
                 <h5>Friend request from <span id="friendRequestSender"></span></h5>
                 <div class="call-buttons">
-                    <button id="acceptFriendRequestButton" class="btn btn-success rounded-pill">Accept</button>
-                    <button id="declineFriendRequestButton" class="btn btn-danger rounded-pill">Decline</button>
+                    <button id="acceptFriendRequestButton" class="btn btn-success rounded-pill">
+                        <i class="fas fa-check me-2"></i>Accept
+                    </button>
+                    <button id="declineFriendRequestButton" class="btn btn-danger rounded-pill">
+                        <i class="fas fa-times me-2"></i>Decline
+                    </button>
                 </div>
             </div>
         </div>
