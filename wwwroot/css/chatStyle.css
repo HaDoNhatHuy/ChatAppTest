@@ -1,0 +1,280 @@
+﻿.chat-container {
+    display: flex;
+    height: 100vh;
+}
+
+.sidebar {
+    width: 300px;
+    border-right: 1px solid #ddd;
+    background: #f8f9fa;
+}
+
+.chat-area {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+}
+
+.chat-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.messages {
+    flex: 1;
+    overflow-y: auto;
+    position: relative;
+}
+
+.messages-list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    height: 100%;
+    overflow-y: auto;
+}
+
+.message {
+    display: flex;
+    margin-bottom: 10px;
+    align-items: flex-start;
+}
+
+    .message.sent {
+        justify-content: flex-end;
+    }
+
+    .message.received {
+        justify-content: flex-start;
+    }
+
+    .message .avatar {
+        width: 40px;
+        height: 40px;
+        border-radius: 50%;
+        margin-right: 10px;
+    }
+
+    .message.sent .avatar {
+        margin-left: 10px;
+        margin-right: 0;
+    }
+
+    .message .content {
+        background: #e9ecef;
+        padding: 8px 12px;
+        border-radius: 15px;
+        max-width: 70%;
+    }
+
+    .message.sent .content {
+        background: #007bff;
+        color: white;
+    }
+
+    .message .content small {
+        display: block;
+        font-size: 0.8em;
+        margin-top: 5px;
+        opacity: 0.7;
+    }
+
+    .message.pinned .content {
+        border: 2px solid #ffc107;
+    }
+
+.date-divider {
+    text-align: center;
+    margin: 10px 0;
+    position: relative;
+}
+
+    .date-divider span {
+        background: #fff;
+        padding: 0 10px;
+        font-size: 0.9em;
+        color: #6c757d;
+    }
+
+    .date-divider::before {
+        content: '';
+        position: absolute;
+        top: 50%;
+        left: 0;
+        right: 0;
+        height: 1px;
+        background: #ddd;
+        z-index: -1;
+    }
+
+.input-area {
+    display: flex;
+    align-items: center;
+}
+
+    .input-area textarea {
+        resize: none;
+    }
+
+.emoji-picker {
+    position: absolute;
+    bottom: 70px;
+    left: 10px;
+    background: white;
+    border: 1px solid #ddd;
+    padding: 10px;
+    border-radius: 10px;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+}
+
+.emoji {
+    cursor: pointer;
+    font-size: 1.5em;
+    margin-right: 5px;
+}
+
+.typing-indicator {
+    font-size: 0.9em;
+    color: #6c757d;
+    margin-bottom: 10px;
+    display: none;
+}
+
+.loading-spinner {
+    display: none;
+    text-align: center;
+    padding: 10px;
+}
+
+    .loading-spinner::before {
+        content: '';
+        display: inline-block;
+        width: 20px;
+        height: 20px;
+        border: 2px solid #007bff;
+        border-top: 2px solid transparent;
+        border-radius: 50%;
+        animation: spin 1s linear infinite;
+    }
+
+.scroll-to-bottom {
+    position: absolute;
+    bottom: 70px;
+    right: 20px;
+    z-index: 1000;
+}
+
+@keyframes spin {
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+.status-dot {
+    display: inline-block;
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    margin-left: 5px;
+}
+
+    .status-dot.online {
+        background: #28a745;
+    }
+
+    .status-dot.offline {
+        background: #6c757d;
+    }
+
+.last-offline {
+    font-size: 0.8em;
+    color: #6c757d;
+    margin-left: 5px;
+}
+
+.unread-count {
+    background: #dc3545;
+    color: white;
+    font-size: 0.8em;
+    padding: 2px 6px;
+    border-radius: 10px;
+    margin-left: 5px;
+}
+
+.user-item, .request-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 5px 0;
+}
+
+.video-container {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    z-index: 1000;
+}
+
+.video-wrapper {
+    display: flex;
+    justify-content: space-between;
+    height: 80%;
+}
+
+.remote-video-container, .local-video-container {
+    position: relative;
+    width: 48%;
+}
+
+.remote-video, .local-video {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    border-radius: 10px;
+}
+
+.video-label {
+    position: absolute;
+    bottom: 10px;
+    left: 10px;
+    background: rgba(0,0,0,0.5);
+    color: white;
+    padding: 5px 10px;
+    border-radius: 5px;
+}
+
+.video-controls {
+    text-align: center;
+    padding: 20px;
+}
+
+.call-modal {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0,0,0,0.5);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 1000;
+}
+
+.call-modal-content {
+    background: white;
+    padding: 20px;
+    border-radius: 10px;
+    text-align: center;
+}
+
+.call-buttons {
+    margin-top: 20px;
+}
+
+    .call-buttons button {
+        margin: 0 10px;
+    }

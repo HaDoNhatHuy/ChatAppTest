@@ -9,6 +9,8 @@ let localStream = null;
 let incomingCaller = null;
 let remoteUser = null;
 let typingTimeout = null;
+let oldestMessageId = null; // Lưu ID của tin nhắn cũ nhất đã tải
+let isLoadingMessages = false; // Trạng thái đang tải tin nhắn cũ
 
 // Đảm bảo DOM được tải hoàn toàn trước khi chạy mã
 document.addEventListener("DOMContentLoaded", async () => {
@@ -20,6 +22,42 @@ document.addEventListener("DOMContentLoaded", async () => {
 
     // Đợi kết nối SignalR trước khi tải danh sách bạn bè
     await startConnection();
+
+    // Thêm sự kiện cuộn cho messagesList để tải tin nhắn cũ
+    const messagesList = document.getElementById("messagesList");
+    messagesList.addEventListener("scroll", async () => {
+        if (messagesList.scrollTop === 0 && !isLoadingMessages && oldestMessageId) {
+            isLoadingMessages = true;
+            const loadingSpinner = document.getElementById("loadingSpinner");
+            if (loadingSpinner) {
+                loadingSpinner.style.display = "block";
+            }
+
+            try {
+                await connection.invoke("LoadOlderMessages", currentUser, currentFriend, oldestMessageId);
+            } catch (err) {
+                console.error("Error loading older messages:", err);
+            } finally {
+                isLoadingMessages = false;
+                if (loadingSpinner) {
+                    loadingSpinner.style.display = "none";
+                }
+            }
+        }
+
+        // Hiển thị nút "Xuống dưới" khi cuộn lên
+        const scrollToBottomBtn = document.getElementById("scrollToBottomBtn");
+        if (messagesList.scrollTop + messagesList.clientHeight < messagesList.scrollHeight - 50) {
+            scrollToBottomBtn.style.display = "block";
+        } else {
+            scrollToBottomBtn.style.display = "none";
+        }
+    });
+
+    // Thêm sự kiện cho nút "Xuống dưới"
+    document.getElementById("scrollToBottomBtn").addEventListener("click", () => {
+        messagesList.scrollTop = messagesList.scrollHeight;
+    });
 });
 
 async function startConnection() {
@@ -49,8 +87,6 @@ connection.onclose(async (error) => {
 
 connection.on("ReceiveMessage", (sender, message, receiver, messageType = "Text", fileUrl = null, isPinned = false, messageId, timestamp) => {
     console.log(`Received message: Sender=${sender}, Receiver=${receiver}, Content=${message}, Type=${messageType}, ID=${messageId}, Timestamp=${timestamp}`);
-    console.log(`Current user: ${currentUser}, Current friend: ${currentFriend}`);
-
     if ((sender === currentFriend && receiver === currentUser) || (sender === currentUser && receiver === currentFriend)) {
         const messagesList = document.getElementById("messagesList");
         if (!messagesList) {
@@ -94,7 +130,17 @@ connection.on("ReceiveMessage", (sender, message, receiver, messageType = "Text"
             </div>
         `;
         messagesList.appendChild(li);
-        messagesList.scrollTop = messagesList.scrollHeight;
+
+        // Cập nhật oldestMessageId nếu đây là tin nhắn đầu tiên hoặc tin nhắn cũ hơn
+        if (!oldestMessageId || messageId < oldestMessageId) {
+            oldestMessageId = messageId;
+        }
+
+        // Tự động cuộn xuống tin nhắn mới nhất nếu người dùng đang ở gần dưới cùng
+        const isNearBottom = messagesList.scrollTop + messagesList.clientHeight >= messagesList.scrollHeight - 50;
+        if (isNearBottom || sender === currentUser) {
+            messagesList.scrollTop = messagesList.scrollHeight;
+        }
 
         li.querySelector(".pin-button").addEventListener("click", () => {
             if (isPinned) {
@@ -117,6 +163,74 @@ connection.on("ReceiveMessage", (sender, message, receiver, messageType = "Text"
         localStorage.setItem("pendingMessages", JSON.stringify(pendingMessages));
     }
     connection.invoke("GetUnreadCounts", currentUser);
+});
+
+connection.on("ReceiveOlderMessages", (messages) => {
+    console.log(`Received older messages: ${messages.length} messages`);
+    const messagesList = document.getElementById("messagesList");
+    if (!messagesList) {
+        console.error("Messages list element not found!");
+        return;
+    }
+
+    const currentScrollHeight = messagesList.scrollHeight;
+    messages.sort((a, b) => new Date(a.Timestamp) - new Date(b.Timestamp)); // Sắp xếp tin nhắn theo thời gian
+
+    messages.forEach(msg => {
+        const messageDate = new Date(msg.Timestamp);
+        const messageDateString = messageDate.toLocaleDateString();
+
+        // Kiểm tra xem có cần thêm divider không
+        const firstMessage = messagesList.firstElementChild;
+        let firstMessageDateString = null;
+        if (firstMessage && firstMessage.dataset.timestamp) {
+            const firstMessageDate = new Date(firstMessage.dataset.timestamp);
+            firstMessageDateString = firstMessageDate.toLocaleDateString();
+        }
+
+        if (!firstMessageDateString || messageDateString !== firstMessageDateString) {
+            const divider = document.createElement("div");
+            divider.className = `date-divider date-${messageDateString}`;
+            divider.innerHTML = `<span>${messageDateString}</span>`;
+            messagesList.insertBefore(divider, messagesList.firstChild);
+        }
+
+        const li = document.createElement("li");
+        li.className = `message ${msg.SenderUsername === currentUser ? "sent" : "received"} ${msg.IsPinned ? "pinned" : ""}`;
+        li.dataset.messageId = msg.Id;
+        li.dataset.timestamp = msg.Timestamp;
+        let content = msg.Content;
+        if (msg.MessageType === "Image") {
+            content = `<img src="${msg.FileUrl}" alt="Image" />`;
+        } else if (msg.MessageType === "File") {
+            content = `<a href="${msg.FileUrl}" class="file-link" target="_blank">Download File</a>`;
+        }
+        li.innerHTML = `
+            <img src="/images/avatars/${msg.SenderUsername}.jpg" class="avatar" onerror="this.src='/images/avatars/default.jpg'" />
+            <div class="content">
+                <span>${content}</span>
+                <small>${messageDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</small>
+                <button class="pin-button btn btn-sm btn-outline-secondary">${msg.IsPinned ? "Unpin" : "Pin"}</button>
+            </div>
+        `;
+        messagesList.insertBefore(li, messagesList.firstChild);
+
+        // Cập nhật oldestMessageId
+        if (!oldestMessageId || msg.Id < oldestMessageId) {
+            oldestMessageId = msg.Id;
+        }
+
+        li.querySelector(".pin-button").addEventListener("click", () => {
+            if (msg.IsPinned) {
+                connection.invoke("UnpinMessage", currentUser, msg.Id).catch(err => console.error("Error unpinning message:", err));
+            } else {
+                connection.invoke("PinMessage", currentUser, msg.Id).catch(err => console.error("Error pinning message:", err));
+            }
+        });
+    });
+
+    // Giữ vị trí cuộn sau khi thêm tin nhắn cũ
+    messagesList.scrollTop = messagesList.scrollHeight - currentScrollHeight;
 });
 
 connection.on("ReceiveNewMessageNotification", (sender) => {
@@ -199,10 +313,12 @@ connection.on("ReceiveUserStatus", (username, isOnline) => {
     for (let item of friendItems) {
         if (item.dataset.username === username) {
             const dot = item.querySelector(".status-dot");
-            dot.className = `status-dot ${isOnline ? "online" : "offline"}`;
             const offlineSpan = item.querySelector(".last-offline");
-            if (!isOnline && offlineSpan) {
-                updateLastOfflineTime(offlineSpan, new Date());
+            dot.className = `status-dot ${isOnline ? "online" : "offline"}`;
+            if (isOnline) {
+                offlineSpan.textContent = ""; // Ẩn dòng chữ "Offline ..." khi online
+            } else {
+                connection.invoke("GetLastOnline", currentUser, username).catch(err => console.error("Error getting last online:", err));
             }
             break;
         }
@@ -230,6 +346,7 @@ connection.on("ReceiveFriends", (friends, friendStatuses) => {
             localStorage.setItem("currentFriend", currentFriend);
             document.getElementById("chat-intro").textContent = `Chat with ${friend}`;
             document.getElementById("messagesList").innerHTML = "";
+            oldestMessageId = null; // Reset oldestMessageId khi chuyển sang bạn bè mới
             const loadingSpinner = document.getElementById("loadingSpinner");
             if (loadingSpinner) {
                 loadingSpinner.style.display = "block";
@@ -316,8 +433,10 @@ connection.on("ReceiveLastOnline", (friend, lastOnline) => {
         if (item.dataset.username === friend) {
             const offlineSpan = item.querySelector(".last-offline");
             if (lastOnline) {
+                // Chuyển đổi lastOnline từ UTC sang thời gian của client
                 const lastOnlineDate = new Date(lastOnline);
-                updateLastOfflineTime(offlineSpan, lastOnlineDate);
+                const clientLastOnline = new Date(lastOnlineDate.getTime() + (lastOnlineDate.getTimezoneOffset() * 60000));
+                updateLastOfflineTime(offlineSpan, clientLastOnline);
             }
             break;
         }
@@ -414,9 +533,16 @@ document.getElementById("fileInput").addEventListener("change", async () => {
 });
 
 function updateLastOfflineTime(element, lastOnline) {
-    const now = new Date();
-    const diff = Math.round((now - lastOnline) / 60000);
-    element.textContent = diff < 60 ? `Offline ${diff} mins ago` : `Offline ${Math.round(diff / 60)} hours ago`;
+    const now = new Date(); // Thời gian hiện tại của client
+    const diff = Math.round((now - lastOnline) / 60000); // Tính chênh lệch bằng phút
+    if (diff < 1) {
+        element.textContent = "Offline just now";
+    } else if (diff < 60) {
+        element.textContent = `Offline ${diff} mins ago`;
+    } else {
+        const hours = Math.round(diff / 60);
+        element.textContent = `Offline ${hours} hours ago`;
+    }
 }
 
 async function startVideoCall(targetUser) {

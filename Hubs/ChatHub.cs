@@ -672,5 +672,40 @@ namespace HermesChatApp.Hubs
                 await Clients.Caller.SendAsync("ReceiveError", "Failed to end call.");
             }
         }
+        public async Task LoadOlderMessages(string currentUser, string friend, int oldestMessageId)
+        {
+            var currentUserEntity = await _context.Users.FirstOrDefaultAsync(u => u.Username == currentUser);
+            var friendEntity = await _context.Users.FirstOrDefaultAsync(u => u.Username == friend);
+
+            if (currentUserEntity == null || friendEntity == null)
+            {
+                await Clients.Caller.SendAsync("ReceiveError", "User not found.");
+                return;
+            }
+
+            var messages = await _context.Messages
+                .Where(m =>
+                    ((m.SenderId == currentUserEntity.Id && m.ReceiverId == friendEntity.Id) ||
+                     (m.SenderId == friendEntity.Id && m.ReceiverId == currentUserEntity.Id)) &&
+                    m.Id < oldestMessageId)
+                .OrderByDescending(m => m.Timestamp)
+                .Take(20) // Tải thêm 20 tin nhắn cũ
+                .Select(m => new
+                {
+                    m.Id,
+                    m.Content,
+                    m.MessageType,
+                    m.FileUrl,
+                    m.IsPinned,
+                    m.Timestamp,
+                    SenderUsername = m.Sender.Username,
+                    ReceiverUsername = m.Receiver.Username
+                })
+                .ToListAsync();
+
+            Console.WriteLine($"Loaded {messages.Count} older messages for {currentUser} and {friend}");
+
+            await Clients.Caller.SendAsync("ReceiveOlderMessages", messages.OrderBy(m => m.Timestamp).ToList());
+        }
     }
 }
