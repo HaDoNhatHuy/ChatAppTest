@@ -428,20 +428,34 @@ connection.on("ReceiveSuccess", (message) => {
 });
 
 connection.on("ReceiveLastOnline", (friend, lastOnline) => {
+    console.log(`Received LastOnline for ${friend}: ${lastOnline}`);
     const friendItems = document.getElementById("friendList").getElementsByTagName("li");
     for (let item of friendItems) {
         if (item.dataset.username === friend) {
             const offlineSpan = item.querySelector(".last-offline");
             if (lastOnline) {
-                // Chuyển đổi lastOnline từ UTC sang thời gian của client
                 const lastOnlineDate = new Date(lastOnline);
-                const clientLastOnline = new Date(lastOnlineDate.getTime() + (lastOnlineDate.getTimezoneOffset() * 60000));
-                updateLastOfflineTime(offlineSpan, clientLastOnline);
+                console.log(`Parsed LastOnline for ${friend}: ${lastOnlineDate}`);
+                updateLastOfflineTime(offlineSpan, lastOnlineDate); // Bỏ điều chỉnh múi giờ
             }
             break;
         }
     }
 });
+
+function updateLastOfflineTime(element, lastOnline) {
+    const now = new Date();
+    console.log(`Current time: ${now}, LastOnline: ${lastOnline}`);
+    const diff = Math.round((now - lastOnline) / 60000); // Tính chênh lệch bằng phút
+    if (diff < 1) {
+        element.textContent = "Offline just now";
+    } else if (diff < 60) {
+        element.textContent = `Offline ${diff} mins ago`;
+    } else {
+        const hours = Math.round(diff / 60);
+        element.textContent = `Offline ${hours} hours ago`;
+    }
+}
 
 document.getElementById("searchUser").addEventListener("input", async () => {
     const query = document.getElementById("searchUser").value.trim();

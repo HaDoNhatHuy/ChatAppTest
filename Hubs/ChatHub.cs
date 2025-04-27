@@ -35,6 +35,30 @@ namespace HermesChatApp.Hubs
             await base.OnConnectedAsync();
         }
 
+        //public override async Task OnDisconnectedAsync(Exception? exception)
+        //{
+        //    try
+        //    {
+        //        var username = _userConnections.FirstOrDefault(x => x.Value == Context.ConnectionId).Key;
+        //        if (username != null)
+        //        {
+        //            var user = await _context.Users.FirstOrDefaultAsync(u => u.Username == username);
+        //            if (user != null)
+        //            {
+        //                user.LastOnline = DateTime.UtcNow;
+        //                _context.Users.Update(user);
+        //                await _context.SaveChangesAsync();
+        //            }
+        //            _userConnections.TryRemove(username, out _);
+        //            await NotifyFriendsOfStatusChange(username, false);
+        //        }
+        //    }
+        //    catch (Exception ex)
+        //    {
+        //        Console.WriteLine($"Error in OnDisconnectedAsync: {ex.Message}");
+        //    }
+        //    await base.OnDisconnectedAsync(exception);
+        //}
         public override async Task OnDisconnectedAsync(Exception? exception)
         {
             try
@@ -45,7 +69,7 @@ namespace HermesChatApp.Hubs
                     var user = await _context.Users.FirstOrDefaultAsync(u => u.Username == username);
                     if (user != null)
                     {
-                        user.LastOnline = DateTime.UtcNow;
+                        user.LastOnline = DateTime.Now; // Sử dụng DateTime.Now thay vì DateTime.UtcNow
                         _context.Users.Update(user);
                         await _context.SaveChangesAsync();
                     }
@@ -107,7 +131,7 @@ namespace HermesChatApp.Hubs
                     MessageType = "Text",
                     SenderId = senderUser.Id,
                     ReceiverId = receiverUser.Id,
-                    Timestamp = DateTime.UtcNow,
+                    Timestamp = DateTime.Now,
                     IsRead = false
                 };
                 _context.Messages.Add(msg);
@@ -152,7 +176,7 @@ namespace HermesChatApp.Hubs
                     FileUrl = fileUrl,
                     SenderId = senderUser.Id,
                     ReceiverId = receiverUser.Id,
-                    Timestamp = DateTime.UtcNow,
+                    Timestamp = DateTime.Now,
                     IsRead = false
                 };
                 _context.Messages.Add(msg);

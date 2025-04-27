@@ -71,7 +71,8 @@ namespace HermesChatApp.Controllers
             }
 
             user.PasswordHash = HashPassword(user.PasswordHash);
-            user.LastOnline = DateTime.UtcNow;
+            //user.LastOnline = DateTime.UtcNow;
+            user.LastOnline = DateTime.Now;
             _context.Users.Add(user);
             await _context.SaveChangesAsync();
 
