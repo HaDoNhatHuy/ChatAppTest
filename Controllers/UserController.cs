@@ -80,7 +80,6 @@ namespace HermesChatApp.Controllers
             var users = _context.Users
                 .Where(u => u.Username.Contains(query) && u.Username != currentUser)
                 .Select(u => u.Username)
-                .Take(10)
                 .ToList();
 
             return Json(new { users });

@@ -10,23 +10,30 @@ let incomingCaller = null;
 let remoteUser = null;
 
 async function startConnection() {
-    if (connection.state === signalR.HubConnectionState.Disconnected) {
-        try {
-            await connection.start();
-            console.log("SignalR Connected.");
-            await connection.invoke("GetFriends", currentUser);
-            await connection.invoke("GetFriendRequests", currentUser);
-        } catch (err) {
-            console.error(err);
-            setTimeout(startConnection, 5000);
+    try {
+        // Kiểm tra trạng thái kết nối trước khi khởi động
+        if (connection.state !== signalR.HubConnectionState.Disconnected) {
+            console.log(`SignalR connection is in ${connection.state} state. Stopping current connection...`);
+            await connection.stop(); // Dừng kết nối hiện tại nếu không ở trạng thái Disconnected
         }
-    } else {
-        console.log(`SignalR connection is in ${connection.state} state. Skipping start.`);
+
+        console.log("Attempting to start SignalR connection...");
+        await connection.start();
+        console.log("SignalR Connected.");
+
+        // Gọi các phương thức ban đầu sau khi kết nối thành công
+        await connection.invoke("GetFriends", currentUser);
+        await connection.invoke("GetFriendRequests", currentUser);
+    } catch (err) {
+        console.error("Error starting SignalR connection:", err);
+        // Thử kết nối lại sau 5 giây
+        setTimeout(startConnection, 5000);
     }
 }
 
-connection.onclose(async () => {
-    console.log("SignalR connection closed. Attempting to reconnect...");
+connection.onclose(async (error) => {
+    console.log("SignalR connection closed. Error:", error);
+    console.log("Attempting to reconnect...");
     await startConnection();
 });
 
@@ -73,7 +80,12 @@ connection.on("ReceiveFriends", (friends, friendStatuses) => {
             currentFriend = friend;
             document.getElementById("chat-intro").textContent = `Chatting with ${friend}`;
             document.getElementById("messagesList").innerHTML = "";
-            connection.invoke("LoadMessages", currentUser, friend).catch(err => console.error(err));
+            document.getElementById("loadingSpinner").style.display = "block";
+            connection.invoke("LoadMessages", currentUser, friend).catch(err => {
+                console.error("Error loading messages:", err);
+            }).finally(() => {
+                document.getElementById("loadingSpinner").style.display = "none";
+            });
         };
         friendList.appendChild(li);
     });
@@ -122,18 +134,22 @@ connection.on("FriendRequestDeclined", (decliner) => {
 });
 
 connection.on("ReceiveError", (message) => {
+    console.log("Error received:", message);
     alert(message);
 });
 
 connection.on("ReceiveSuccess", (message) => {
+    console.log("Success received:", message);
     alert(message);
 });
 
 document.getElementById("searchUser").addEventListener("input", async () => {
     const query = document.getElementById("searchUser").value.trim();
     if (query) {
+        console.log(`Searching for users with query: ${query}`);
         const response = await fetch(`/User/SearchUsers?query=${encodeURIComponent(query)}`);
         const data = await response.json();
+        console.log("Search results:", data);
         const searchResults = document.getElementById("searchResults");
         searchResults.innerHTML = "";
         data.users.forEach(user => {
@@ -144,7 +160,10 @@ document.getElementById("searchUser").addEventListener("input", async () => {
                 <button class="btn btn-primary btn-sm">Add Friend</button>
             `;
             div.querySelector("button").onclick = () => {
-                connection.invoke("SendFriendRequest", currentUser, user).catch(err => console.error(err));
+                console.log(`Sending friend request from ${currentUser} to ${user}`);
+                connection.invoke("SendFriendRequest", currentUser, user).catch(err => {
+                    console.error("Error sending friend request:", err);
+                });
             };
             searchResults.appendChild(div);
         });
@@ -153,7 +172,7 @@ document.getElementById("searchUser").addEventListener("input", async () => {
     }
 });
 
-document.getElement AElement("sendButton").addEventListener("click", () => {
+document.getElementById("sendButton").addEventListener("click", () => {
     const message = document.getElementById("messageInput").value.trim();
     if (message && currentFriend) {
         connection.invoke("SendMessage", currentUser, currentFriend, message).catch(err => console.error(err));
@@ -168,7 +187,6 @@ document.getElementById("messageInput").addEventListener("keypress", (event) => 
     }
 });
 
-// WebRTC Video Call Logic
 async function startVideoCall(targetUser) {
     if (!currentFriend) {
         alert("Please select a friend to call.");

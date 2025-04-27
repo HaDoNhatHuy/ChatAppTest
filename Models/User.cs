@@ -7,5 +7,6 @@
         public string Email { get; set; }
         public string PasswordHash { get; set; }
         public string? AvatarUrl { get; set; } // URL của ảnh đại diện
+        public DateTime? LastOnline { get; set; } // Thêm cột LastOnline
     }
 }

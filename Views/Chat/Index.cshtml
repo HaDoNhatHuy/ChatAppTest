@@ -34,7 +34,10 @@
             <h5 class="mb-0 flex-grow-1" id="chat-intro">Select a friend to start chatting</h5>
         </div>
         <div class="messages p-3">
-            <ul id="messagesList" class="list-unstyled"></ul>
+            @* <ul id="messagesList" class="list-unstyled"></ul> *@
+            <ul id="messagesList">
+                <div id="loadingSpinner" class="loading-spinner"></div>
+            </ul>
         </div>
         <div class="input-area p-3 border-top d-flex align-items-center">
             <textarea id="messageInput" class="form-control rounded-pill me-2" placeholder="Type a message..." rows="1"></textarea>
