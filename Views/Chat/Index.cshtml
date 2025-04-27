@@ -6,7 +6,6 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/microsoft-signalr/8.0.7/signalr.min.js"></script>
     <script src="https://unpkg.com/simple-peer@9.11.1/simplepeer.min.js"></script>
     <script>
-        // Truyền username từ ViewBag sang JavaScript
         const currentUser = "@ViewBag.Username";
     </script>
     <script src="~/js/chat.js"></script>
@@ -14,9 +13,8 @@
 <div class="chat-container">
     <!-- Sidebar Left: Friends -->
     <div class="sidebar left-sidebar">
-        <div class="p-3 border-bottom d-flex justify-content-between align-items-center">
+        <div class="p-3 border-bottom">
             <h5 class="mb-0">Friends</h5>
-            <a href="/User/Logout" class="btn btn-outline-primary btn-sm rounded-pill">Logout</a>
         </div>
         <div class="p-3">
             <div class="input-group mb-3">
@@ -34,16 +32,30 @@
             <h5 class="mb-0 flex-grow-1" id="chat-intro">Select a friend to start chatting</h5>
         </div>
         <div class="messages p-3">
-            @* <ul id="messagesList" class="list-unstyled"></ul> *@
+            <div id="typingIndicator" class="typing-indicator"></div>
             <ul id="messagesList">
                 <div id="loadingSpinner" class="loading-spinner"></div>
             </ul>
         </div>
         <div class="input-area p-3 border-top d-flex align-items-center">
+            <button id="emojiButton" class="btn btn-outline-secondary rounded-circle me-2"><i class="fas fa-smile"></i></button>
+            <div class="emoji-picker" id="emojiPicker" style="display: none;">
+                <span class="emoji" data-emoji="😊">😊</span>
+                <span class="emoji" data-emoji="😂">😂</span>
+                <span class="emoji" data-emoji="❤️">❤️</span>
+                <span class="emoji" data-emoji="👍">👍</span>
+                <span class="emoji" data-emoji="😢">😢</span>
+                <span class="emoji" data-emoji="😡">😡</span>
+                <span class="emoji" data-emoji="🎉">🎉</span>
+                <span class="emoji" data-emoji="🚀">🚀</span>
+            </div>
+            <input type="file" id="fileInput" class="d-none" accept="image/*,.pdf,.doc,.docx" />
+            <button id="fileButton" class="btn btn-outline-secondary rounded-circle me-2"><i class="fas fa-paperclip"></i></button>
             <textarea id="messageInput" class="form-control rounded-pill me-2" placeholder="Type a message..." rows="1"></textarea>
             <button id="sendButton" class="btn btn-primary rounded-circle"><i class="fas fa-paper-plane"></i></button>
             <button id="startVideoCall" class="btn btn-success rounded-circle ms-2"><i class="fas fa-video"></i></button>
         </div>
+        <!-- Video Container and Modals -->
         <div id="videoContainer" class="video-container d-none p-3 bg-dark">
             <div class="video-wrapper">
                 <div class="remote-video-container">
@@ -56,13 +68,13 @@
                 </div>
             </div>
             <div class="video-controls">
-                <button id="endCallButton" class="btn btn-danger rounded-pill">Stop Call</button>
+                <button id="endCallButton" class="btn btn-danger rounded-pill">End Call</button>
             </div>
         </div>
         <!-- Incoming Call Modal -->
         <div id="callModal" class="call-modal d-none">
             <div class="call-modal-content">
-                <h5>Incoming Call from <span id="callerName"></span></h5>
+                <h5>Incoming call from <span id="callerName"></span></h5>
                 <div class="call-buttons">
                     <button id="acceptCallButton" class="btn btn-success rounded-pill">Accept</button>
                     <button id="declineCallButton" class="btn btn-danger rounded-pill">Decline</button>
@@ -72,7 +84,7 @@
         <!-- Friend Request Modal -->
         <div id="friendRequestModal" class="call-modal d-none">
             <div class="call-modal-content">
-                <h5>Friend Request from <span id="friendRequestSender"></span></h5>
+                <h5>Friend request from <span id="friendRequestSender"></span></h5>
                 <div class="call-buttons">
                     <button id="acceptFriendRequestButton" class="btn btn-success rounded-pill">Accept</button>
                     <button id="declineFriendRequestButton" class="btn btn-danger rounded-pill">Decline</button>

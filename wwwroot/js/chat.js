@@ -8,25 +8,37 @@ let peer = null;
 let localStream = null;
 let incomingCaller = null;
 let remoteUser = null;
+let typingTimeout = null;
+
+document.addEventListener("DOMContentLoaded", () => {
+    const savedFriend = localStorage.getItem("currentFriend");
+    if (savedFriend) {
+        currentFriend = savedFriend;
+        document.getElementById("chat-intro").textContent = `Chat with ${currentFriend}`;
+        document.getElementById("messagesList").innerHTML = "";
+        document.getElementById("loadingSpinner").style.display = "block";
+        connection.invoke("LoadMessages", currentUser, currentFriend).catch(err => {
+            console.error("Error loading messages:", err);
+        }).finally(() => {
+            document.getElementById("loadingSpinner").style.display = "none";
+        });
+    }
+});
 
 async function startConnection() {
     try {
-        // Kiểm tra trạng thái kết nối trước khi khởi động
         if (connection.state !== signalR.HubConnectionState.Disconnected) {
             console.log(`SignalR connection is in ${connection.state} state. Stopping current connection...`);
-            await connection.stop(); // Dừng kết nối hiện tại nếu không ở trạng thái Disconnected
+            await connection.stop();
         }
-
         console.log("Attempting to start SignalR connection...");
         await connection.start();
         console.log("SignalR Connected.");
-
-        // Gọi các phương thức ban đầu sau khi kết nối thành công
         await connection.invoke("GetFriends", currentUser);
         await connection.invoke("GetFriendRequests", currentUser);
+        await connection.invoke("GetUnreadCounts", currentUser);
     } catch (err) {
         console.error("Error starting SignalR connection:", err);
-        // Thử kết nối lại sau 5 giây
         setTimeout(startConnection, 5000);
     }
 }
@@ -37,20 +49,120 @@ connection.onclose(async (error) => {
     await startConnection();
 });
 
-connection.on("ReceiveMessage", (sender, message, receiver) => {
+connection.on("ReceiveMessage", (sender, message, receiver, messageType = "Text", fileUrl = null, isPinned = false, messageId, timestamp) => {
     if ((sender === currentFriend && receiver === currentUser) || (sender === currentUser && receiver === currentFriend)) {
+        const messagesList = document.getElementById("messagesList");
+        const lastMessage = messagesList.lastElementChild;
+        const messageDate = new Date(timestamp);
+        const messageDateString = messageDate.toLocaleDateString();
+
+        let lastMessageDateString = null;
+        if (lastMessage && lastMessage.dataset.timestamp) {
+            const lastMessageDate = new Date(lastMessage.dataset.timestamp);
+            lastMessageDateString = lastMessageDate.toLocaleDateString();
+        }
+
+        if (!lastMessageDateString || messageDateString !== lastMessageDateString) {
+            const divider = document.createElement("div");
+            divider.className = `date-divider date-${messageDateString}`;
+            divider.innerHTML = `<span>${messageDateString}</span>`;
+            messagesList.appendChild(divider);
+        }
+
         const li = document.createElement("li");
-        li.className = `message ${sender === currentUser ? "sent" : "received"}`;
-        const timestamp = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        li.className = `message ${sender === currentUser ? "sent" : "received"} ${isPinned ? "pinned" : ""}`;
+        li.dataset.messageId = messageId;
+        li.dataset.timestamp = timestamp;
+        let content = message;
+        if (messageType === "Image") {
+            content = `<img src="${fileUrl}" alt="Image" />`;
+        } else if (messageType === "File") {
+            content = `<a href="${fileUrl}" class="file-link" target="_blank">Download File</a>`;
+        }
         li.innerHTML = `
             <img src="/images/avatars/${sender}.jpg" class="avatar" onerror="this.src='/images/avatars/default.jpg'" />
             <div class="content">
-                <span>${message}</span>
-                <small>${timestamp}</small>
+                <span>${content}</span>
+                <small>${messageDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</small>
+                <button class="pin-button btn btn-sm btn-outline-secondary">${isPinned ? "Unpin" : "Pin"}</button>
             </div>
         `;
-        document.getElementById("messagesList").appendChild(li);
-        document.getElementById("messagesList").scrollTop = document.getElementById("messagesList").scrollHeight;
+        messagesList.appendChild(li);
+        messagesList.scrollTop = messagesList.scrollHeight;
+
+        li.querySelector(".pin-button").addEventListener("click", () => {
+            if (isPinned) {
+                connection.invoke("UnpinMessage", currentUser, messageId).catch(err => console.error("Error unpinning message:", err));
+            } else {
+                connection.invoke("PinMessage", currentUser, messageId).catch(err => console.error("Error pinning message:", err));
+            }
+        });
+
+        if (sender === currentFriend && receiver === currentUser) {
+            connection.invoke("MarkMessagesAsRead", currentUser, currentFriend);
+        }
+    }
+    connection.invoke("GetUnreadCounts", currentUser);
+});
+
+connection.on("ReceiveNewMessageNotification", (sender) => {
+    if (sender !== currentFriend) {
+        if (Notification.permission === "granted") {
+            new Notification(`New message from ${sender}`, {
+                body: "You have a new message!",
+                icon: "/images/avatars/default.jpg"
+            });
+        } else if (Notification.permission !== "denied") {
+            Notification.requestPermission().then(permission => {
+                if (permission === "granted") {
+                    new Notification(`New message from ${sender}`, {
+                        body: "You have a new message!",
+                        icon: "/images/avatars/default.jpg"
+                    });
+                }
+            });
+        }
+    }
+});
+
+connection.on("MessagePinned", (messageId, isPinned) => {
+    const messageElement = document.querySelector(`.message[data-message-id="${messageId}"]`);
+    if (messageElement) {
+        messageElement.classList.toggle("pinned", isPinned);
+        const pinButton = messageElement.querySelector(".pin-button");
+        pinButton.textContent = isPinned ? "Unpin" : "Pin";
+    }
+});
+
+connection.on("ReceiveTyping", (sender) => {
+    if (sender === currentFriend) {
+        document.getElementById("typingIndicator").style.display = "block";
+    }
+});
+
+connection.on("ReceiveStopTyping", (sender) => {
+    if (sender === currentFriend) {
+        document.getElementById("typingIndicator").style.display = "none";
+    }
+});
+
+connection.on("ReceiveUnreadCounts", (unreadCounts) => {
+    const friendList = document.getElementById("friendList").getElementsByTagName("li");
+    for (let item of friendList) {
+        const username = item.dataset.username;
+        const countSpan = item.querySelector(".unread-count");
+        if (unreadCounts[username] && unreadCounts[username] > 0) {
+            if (!countSpan) {
+                const span = document.createElement("span");
+                span.className = "unread-count";
+                span.textContent = unreadCounts[username];
+                item.appendChild(span);
+            } else {
+                countSpan.textContent = unreadCounts[username];
+            }
+        } else if (countSpan) {
+            countSpan.remove();
+        }
     }
 });
 
@@ -60,6 +172,10 @@ connection.on("ReceiveUserStatus", (username, isOnline) => {
         if (item.dataset.username === username) {
             const dot = item.querySelector(".status-dot");
             dot.className = `status-dot ${isOnline ? "online" : "offline"}`;
+            const offlineSpan = item.querySelector(".last-offline");
+            if (!isOnline && offlineSpan) {
+                updateLastOfflineTime(offlineSpan, new Date());
+            }
             break;
         }
     }
@@ -68,6 +184,7 @@ connection.on("ReceiveUserStatus", (username, isOnline) => {
 connection.on("ReceiveFriends", (friends, friendStatuses) => {
     const friendList = document.getElementById("friendList");
     friendList.innerHTML = "";
+    friends.sort((a, b) => a.localeCompare(b));
     friends.forEach(friend => {
         const li = document.createElement("li");
         li.className = "p-2 cursor-pointer";
@@ -75,10 +192,15 @@ connection.on("ReceiveFriends", (friends, friendStatuses) => {
         li.innerHTML = `
             ${friend}
             <span class="status-dot ${friendStatuses[friend] ? "online" : "offline"}"></span>
+            <span class="last-offline"></span>
         `;
+        if (!friendStatuses[friend]) {
+            connection.invoke("GetLastOnline", currentUser, friend).catch(err => console.error("Error getting last online:", err));
+        }
         li.onclick = () => {
             currentFriend = friend;
-            document.getElementById("chat-intro").textContent = `Chatting with ${friend}`;
+            localStorage.setItem("currentFriend", currentFriend);
+            document.getElementById("chat-intro").textContent = `Chat with ${friend}`;
             document.getElementById("messagesList").innerHTML = "";
             document.getElementById("loadingSpinner").style.display = "block";
             connection.invoke("LoadMessages", currentUser, friend).catch(err => {
@@ -89,6 +211,7 @@ connection.on("ReceiveFriends", (friends, friendStatuses) => {
         };
         friendList.appendChild(li);
     });
+    connection.invoke("GetUnreadCounts", currentUser);
 });
 
 connection.on("ReceiveFriendRequests", (requests) => {
@@ -143,6 +266,20 @@ connection.on("ReceiveSuccess", (message) => {
     alert(message);
 });
 
+connection.on("ReceiveLastOnline", (friend, lastOnline) => {
+    const friendItems = document.getElementById("friendList").getElementsByTagName("li");
+    for (let item of friendItems) {
+        if (item.dataset.username === friend) {
+            const offlineSpan = item.querySelector(".last-offline");
+            if (lastOnline) {
+                const lastOnlineDate = new Date(lastOnline);
+                updateLastOfflineTime(offlineSpan, lastOnlineDate);
+            }
+            break;
+        }
+    }
+});
+
 document.getElementById("searchUser").addEventListener("input", async () => {
     const query = document.getElementById("searchUser").value.trim();
     if (query) {
@@ -177,6 +314,7 @@ document.getElementById("sendButton").addEventListener("click", () => {
     if (message && currentFriend) {
         connection.invoke("SendMessage", currentUser, currentFriend, message).catch(err => console.error(err));
         document.getElementById("messageInput").value = "";
+        connection.invoke("StopTyping", currentUser, currentFriend);
     }
 });
 
@@ -186,6 +324,56 @@ document.getElementById("messageInput").addEventListener("keypress", (event) => 
         document.getElementById("sendButton").click();
     }
 });
+
+document.getElementById("messageInput").addEventListener("input", () => {
+    if (currentFriend) {
+        connection.invoke("SendTyping", currentUser, currentFriend);
+        clearTimeout(typingTimeout);
+        typingTimeout = setTimeout(() => {
+            connection.invoke("StopTyping", currentUser, currentFriend);
+        }, 2000);
+    }
+});
+
+document.getElementById("emojiButton").addEventListener("click", () => {
+    const picker = document.getElementById("emojiPicker");
+    picker.style.display = picker.style.display === "block" ? "none" : "block";
+});
+
+document.querySelectorAll(".emoji").forEach(emoji => {
+    emoji.addEventListener("click", () => {
+        const messageInput = document.getElementById("messageInput");
+        messageInput.value += emoji.dataset.emoji;
+        document.getElementById("emojiPicker").style.display = "none";
+    });
+});
+
+document.getElementById("fileButton").addEventListener("click", () => {
+    document.getElementById("fileInput").click();
+});
+
+document.getElementById("fileInput").addEventListener("change", async () => {
+    const file = document.getElementById("fileInput").files[0];
+    if (file && currentFriend) {
+        const formData = new FormData();
+        formData.append("file", file);
+        const response = await fetch("/api/upload", {
+            method: "POST",
+            body: formData
+        });
+        const data = await response.json();
+        if (data.fileUrl) {
+            const messageType = file.type.startsWith("image/") ? "Image" : "File";
+            connection.invoke("SendFileMessage", currentUser, currentFriend, data.fileUrl, messageType);
+        }
+    }
+});
+
+function updateLastOfflineTime(element, lastOnline) {
+    const now = new Date();
+    const diff = Math.round((now - lastOnline) / 60000);
+    element.textContent = diff < 60 ? `Offline ${diff} mins ago` : `Offline ${Math.round(diff / 60)} hours ago`;
+}
 
 async function startVideoCall(targetUser) {
     if (!currentFriend) {
@@ -220,6 +408,7 @@ async function startVideoCall(targetUser) {
 
         peer.on("error", err => {
             console.error("Peer error:", err);
+            alert("An error occurred during the call: " + err.message);
             endCall();
         });
 
@@ -230,7 +419,7 @@ async function startVideoCall(targetUser) {
 
     } catch (err) {
         console.error("Error accessing media devices:", err);
-        alert("Could not access camera or microphone.");
+        alert("Unable to access camera or microphone. Please check your permissions or device settings.");
     }
 }
 
@@ -271,6 +460,7 @@ connection.on("ReceiveSignal", async (sender, signalData) => {
 
                 peer.on("error", err => {
                     console.error("Peer error:", err);
+                    alert("An error occurred during the call: " + err.message);
                     endCall();
                 });
 
@@ -282,7 +472,8 @@ connection.on("ReceiveSignal", async (sender, signalData) => {
                 peer.signal(JSON.parse(signalData));
             } catch (err) {
                 console.error("Error accessing media devices:", err);
-                alert("Could not access camera or microphone.");
+                alert("Unable to access camera or microphone. Please check your permissions or device settings.");
+                endCall();
             }
         };
 

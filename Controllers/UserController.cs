@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using System.Security.Cryptography;
 using System.Text;
+using System.Threading.Tasks;
 
 namespace HermesChatApp.Controllers
 {
@@ -22,12 +23,19 @@ namespace HermesChatApp.Controllers
         }
 
         [HttpPost]
-        public IActionResult Login(string username, string password)
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> Login(string username, string password)
         {
-            var user = _context.Users.FirstOrDefault(u => u.Username == username && u.PasswordHash == password);
-            if (user == null)
+            if (string.IsNullOrEmpty(username) || string.IsNullOrEmpty(password))
             {
-                ViewBag.Error = "Invalid username or password.";
+                ViewBag.Error = "Vui lòng nhập tên người dùng và mật khẩu.";
+                return View();
+            }
+
+            var user = await _context.Users.FirstOrDefaultAsync(u => u.Username == username);
+            if (user == null || !VerifyPassword(password, user.PasswordHash))
+            {
+                ViewBag.Error = "Tên người dùng hoặc mật khẩu không đúng.";
                 return View();
             }
 
@@ -41,24 +49,33 @@ namespace HermesChatApp.Controllers
         }
 
         [HttpPost]
-        public IActionResult Register(User user, string ConfirmPassword)
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> Register(User user, string ConfirmPassword)
         {
             if (_context.Users.Any(u => u.Username == user.Username))
             {
-                ViewBag.Error = "Username already exists.";
+                ViewBag.Error = "Tên người dùng đã tồn tại.";
+                return View();
+            }
+
+            if (string.IsNullOrEmpty(user.Username) || string.IsNullOrEmpty(user.Email) || string.IsNullOrEmpty(user.PasswordHash))
+            {
+                ViewBag.Error = "Vui lòng nhập đầy đủ thông tin.";
                 return View();
             }
 
             if (user.PasswordHash != ConfirmPassword)
             {
-                ViewBag.Error = "Passwords do not match.";
+                ViewBag.Error = "Mật khẩu không khớp.";
                 return View();
             }
-            
-            _context.Users.Add(user);
-            _context.SaveChanges();
 
-            TempData["SuccessfulRegister"] = "Registration successful! Please login.";
+            user.PasswordHash = HashPassword(user.PasswordHash);
+            user.LastOnline = DateTime.UtcNow;
+            _context.Users.Add(user);
+            await _context.SaveChangesAsync();
+
+            TempData["SuccessfulRegister"] = "Đăng ký thành công! Vui lòng đăng nhập.";
             return RedirectToAction("Login");
         }
 
@@ -69,7 +86,7 @@ namespace HermesChatApp.Controllers
         }
 
         [HttpGet]
-        public IActionResult SearchUsers(string query)
+        public async Task<IActionResult> SearchUsers(string query)
         {
             if (string.IsNullOrEmpty(query))
             {
@@ -77,27 +94,26 @@ namespace HermesChatApp.Controllers
             }
 
             var currentUser = HttpContext.Session.GetString("Username");
-            var users = _context.Users
+            var users = await _context.Users
                 .Where(u => u.Username.Contains(query) && u.Username != currentUser)
                 .Select(u => u.Username)
-                .ToList();
+                .ToListAsync();
 
             return Json(new { users });
         }
 
-        //private string HashPassword(string password)
-        //{
-        //    using var sha256 = SHA256.Create();
-        //    var bytes = Encoding.UTF8.GetBytes(password);
-        //    var hash = sha256.ComputeHash(bytes);
-        //    return Convert.ToBase64String(hash);
-        //}
+        private string HashPassword(string password)
+        {
+            using var sha256 = SHA256.Create();
+            var bytes = Encoding.UTF8.GetBytes(password);
+            var hash = sha256.ComputeHash(bytes);
+            return Convert.ToBase64String(hash);
+        }
 
-        //private bool VerifyPassword(string password, string hashedPassword)
-        //{
-        //    var hash = HashPassword(password);
-        //    return hash == hashedPassword;
-        //}
+        private bool VerifyPassword(string password, string hashedPassword)
+        {
+            var hash = HashPassword(password);
+            return hash == hashedPassword;
+        }
     }
 }
-
