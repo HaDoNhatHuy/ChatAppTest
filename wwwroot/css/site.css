@@ -377,13 +377,13 @@
     background: rgba(255, 255, 255, 0.8);
     border-radius: 8px;
     z-index: 10;
-    opacity: 0;
-    transition: opacity 0.3s ease; /* Thêm hiệu ứng fade */
+    display: none; /* Ẩn mặc định */
+    transition: opacity 0.3s ease;
 }
 
     .loading-spinner.active {
+        display: block; /* Đảm bảo hiển thị khi active */
         opacity: 1;
-        display: block;
     }
 
     .loading-spinner::before {
@@ -414,7 +414,7 @@
     border-radius: 50%;
     width: 40px;
     height: 40px;
-    display: flex;
+    display: none; /* Ẩn mặc định */
     align-items: center;
     justify-content: center;
     opacity: 0;
@@ -423,8 +423,8 @@
 }
 
     .scroll-to-bottom.active {
+        display: flex; /* Hiển thị khi active */
         opacity: 1;
-        display: flex;
     }
 
 .date-divider {
@@ -541,7 +541,14 @@ body.dark-mode {
     color: #888;
     padding: 10px;
     display: none;
+    position: absolute;
+    bottom: 10px;
+    left: 20px;
+    z-index: 10;
 }
+    .typing-indicator.active {
+        display: block;
+    }
 
     .typing-indicator::before {
         content: "• • •";

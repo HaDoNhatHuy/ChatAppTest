@@ -12,7 +12,6 @@ let typingTimeout = null;
 let oldestMessageId = null;
 let isLoadingMessages = false;
 
-// Đảm bảo DOM được tải hoàn toàn trước khi chạy mã
 document.addEventListener("DOMContentLoaded", async () => {
     console.log("DOM loaded, initializing chat...");
 
@@ -43,15 +42,22 @@ document.addEventListener("DOMContentLoaded", async () => {
         }
 
         const scrollToBottomBtn = document.getElementById("scrollToBottomBtn");
-        if (messagesList.scrollTop + messagesList.clientHeight < messagesList.scrollHeight - 50) {
-            scrollToBottomBtn.classList.add("active");
+        if (scrollToBottomBtn) {
+            if (messagesList.scrollTop + messagesList.clientHeight < messagesList.scrollHeight - 50) {
+                console.log("Showing scroll to bottom button on scroll");
+                scrollToBottomBtn.classList.add("active");
+            } else {
+                console.log("Hiding scroll to bottom button on scroll");
+                scrollToBottomBtn.classList.remove("active");
+            }
         } else {
-            scrollToBottomBtn.classList.remove("active");
+            console.error("Scroll to bottom button element not found!");
         }
     });
 
     document.getElementById("scrollToBottomBtn").addEventListener("click", () => {
         messagesList.scrollTop = messagesList.scrollHeight;
+        console.log("Scrolled to bottom via button");
     });
 });
 
@@ -139,14 +145,36 @@ connection.on("ReceiveMessage", (sender, message, receiver, messageType = "Text"
             oldestMessageId = messageId;
         }
 
-        if (sender === currentUser) {
-            messagesList.scrollTop = messagesList.scrollHeight;
-        } else {
-            const isNearBottom = messagesList.scrollTop + messagesList.clientHeight >= messagesList.scrollHeight - 50;
-            if (isNearBottom) {
-                messagesList.scrollTop = messagesList.scrollHeight;
-            }
-        }
+        const scrollToBottom = (retryCount = 0) => {
+            setTimeout(() => {
+                const isNearBottom = messagesList.scrollTop + messagesList.clientHeight >= messagesList.scrollHeight - 50;
+                if (sender === currentUser || isNearBottom) {
+                    console.log(`Auto-scrolling to bottom. ScrollHeight: ${messagesList.scrollHeight}, ScrollTop: ${messagesList.scrollTop}, ClientHeight: ${messagesList.clientHeight}`);
+                    messagesList.scrollTop = messagesList.scrollHeight;
+                    setTimeout(() => {
+                        if (messagesList.scrollTop + messagesList.clientHeight < messagesList.scrollHeight - 50 && retryCount < 3) {
+                            console.log(`Scroll to bottom failed, retrying (${retryCount + 1})...`);
+                            scrollToBottom(retryCount + 1);
+                        }
+                    }, 100);
+                }
+
+                const scrollToBottomBtn = document.getElementById("scrollToBottomBtn");
+                if (scrollToBottomBtn) {
+                    if (messagesList.scrollTop + messagesList.clientHeight < messagesList.scrollHeight - 50) {
+                        console.log("Showing scroll to bottom button");
+                        scrollToBottomBtn.classList.add("active");
+                    } else {
+                        console.log("Hiding scroll to bottom button");
+                        scrollToBottomBtn.classList.remove("active");
+                    }
+                } else {
+                    console.error("Scroll to bottom button element not found!");
+                }
+            }, 300);
+        };
+
+        scrollToBottom();
 
         li.querySelector(".pin-button").addEventListener("click", () => {
             if (isPinned) {
@@ -238,27 +266,66 @@ connection.on("ReceiveOlderMessages", (messages) => {
 connection.on("ReceiveNewMessageNotification", (sender) => {
     console.log(`New message notification from ${sender}`);
     if (sender !== currentFriend) {
-        const notification = new Notification(`New message from ${sender}`, {
-            body: "You have a new message!",
-            icon: "/images/avatars/default.jpg"
-        });
-        notification.onclick = () => {
-            currentFriend = sender;
-            localStorage.setItem("currentFriend", currentFriend);
-            document.getElementById("chat-intro").textContent = `Chat with ${sender}`;
-            document.getElementById("messagesList").innerHTML = "";
-            const loadingSpinner = document.getElementById("loadingSpinner");
-            if (loadingSpinner) {
-                loadingSpinner.classList.add("active");
+        if ("Notification" in window) {
+            const requestNotificationPermission = async () => {
+                const permission = await Notification.requestPermission();
+                return permission;
+            };
+
+            const sendNotification = () => {
+                const notification = new Notification(`New message from ${sender}`, {
+                    body: "You have a new message!",
+                    icon: "/images/avatars/default.jpg"
+                });
+                notification.onclick = () => {
+                    currentFriend = sender;
+                    localStorage.setItem("currentFriend", currentFriend);
+                    document.getElementById("chat-intro").textContent = `Chat with ${sender}`;
+                    document.getElementById("messagesList").innerHTML = "";
+                    const loadingSpinner = document.getElementById("loadingSpinner");
+                    if (loadingSpinner) {
+                        loadingSpinner.classList.add("active");
+                    }
+                    connection.invoke("LoadMessages", currentUser, sender).catch(err => {
+                        console.error("Error loading messages:", err);
+                    }).finally(() => {
+                        if (loadingSpinner) {
+                            loadingSpinner.classList.remove("active");
+                        }
+                        const messagesList = document.getElementById("messagesList");
+                        const scrollToBottom = (retryCount = 0) => {
+                            setTimeout(() => {
+                                console.log(`Scroll height after loading messages (notification): ${messagesList.scrollHeight}, ScrollTop: ${messagesList.scrollTop}, ClientHeight: ${messagesList.clientHeight}`);
+                                messagesList.scrollTop = messagesList.scrollHeight;
+                                setTimeout(() => {
+                                    if (messagesList.scrollTop + messagesList.clientHeight < messagesList.scrollHeight - 50 && retryCount < 3) {
+                                        console.log(`Scroll to bottom failed after loading messages (notification), retrying (${retryCount + 1})...`);
+                                        scrollToBottom(retryCount + 1);
+                                    }
+                                }, 100);
+                            }, 300);
+                        };
+                        scrollToBottom();
+                    });
+                };
+            };
+
+            if (Notification.permission === "granted") {
+                sendNotification();
+            } else if (Notification.permission !== "denied") {
+                requestNotificationPermission().then(permission => {
+                    if (permission === "granted") {
+                        sendNotification();
+                    } else {
+                        console.log("Notification permission denied by user.");
+                    }
+                });
+            } else {
+                console.log("Notification permission already denied.");
             }
-            connection.invoke("LoadMessages", currentUser, sender).catch(err => {
-                console.error("Error loading messages:", err);
-            }).finally(() => {
-                if (loadingSpinner) {
-                    loadingSpinner.classList.remove("active");
-                }
-            });
-        };
+        } else {
+            console.log("This browser does not support notifications.");
+        }
     }
 });
 
@@ -272,19 +339,27 @@ connection.on("MessagePinned", (messageId, isPinned) => {
 });
 
 connection.on("ReceiveTyping", (sender) => {
+    console.log(`Received typing from ${sender}`);
     if (sender === currentFriend) {
         const typingIndicator = document.getElementById("typingIndicator");
         if (typingIndicator) {
-            typingIndicator.style.display = "block";
+            typingIndicator.classList.add("active");
+            console.log("Typing indicator shown");
+        } else {
+            console.error("Typing indicator element not found!");
         }
     }
 });
 
 connection.on("ReceiveStopTyping", (sender) => {
+    console.log(`Received stop typing from ${sender}`);
     if (sender === currentFriend) {
         const typingIndicator = document.getElementById("typingIndicator");
         if (typingIndicator) {
-            typingIndicator.style.display = "none";
+            typingIndicator.classList.remove("active");
+            console.log("Typing indicator hidden");
+        } else {
+            console.error("Typing indicator element not found!");
         }
     }
 });
@@ -370,7 +445,19 @@ connection.on("ReceiveFriends", (friends, friendStatuses) => {
                     loadingSpinner.classList.remove("active");
                 }
                 const messagesList = document.getElementById("messagesList");
-                messagesList.scrollTop = messagesList.scrollHeight;
+                const scrollToBottom = (retryCount = 0) => {
+                    setTimeout(() => {
+                        console.log(`Scroll height after loading messages: ${messagesList.scrollHeight}, ScrollTop: ${messagesList.scrollTop}, ClientHeight: ${messagesList.clientHeight}`);
+                        messagesList.scrollTop = messagesList.scrollHeight;
+                        setTimeout(() => {
+                            if (messagesList.scrollTop + messagesList.clientHeight < messagesList.scrollHeight - 50 && retryCount < 3) {
+                                console.log(`Scroll to bottom failed after loading messages, retrying (${retryCount + 1})...`);
+                                scrollToBottom(retryCount + 1);
+                            }
+                        }, 100);
+                    }, 300);
+                };
+                scrollToBottom();
             });
         };
         friendList.appendChild(li);
@@ -514,10 +601,12 @@ document.getElementById("messageInput").addEventListener("keypress", (event) => 
 
 document.getElementById("messageInput").addEventListener("input", () => {
     if (currentFriend) {
-        connection.invoke("SendTyping", currentUser, currentFriend);
+        console.log(`Sending typing event to ${currentFriend}`);
+        connection.invoke("SendTyping", currentUser, currentFriend).catch(err => console.error("Error sending typing:", err));
         clearTimeout(typingTimeout);
         typingTimeout = setTimeout(() => {
-            connection.invoke("StopTyping", currentUser, currentFriend);
+            console.log(`Sending stop typing event to ${currentFriend}`);
+            connection.invoke("StopTyping", currentUser, currentFriend).catch(err => console.error("Error stopping typing:", err));
         }, 2000);
     }
 });
@@ -557,7 +646,6 @@ document.getElementById("fileInput").addEventListener("change", async () => {
 });
 
 async function startVideoCall(targetUser) {
-    // Kiểm tra nếu đã có cuộc gọi đang diễn ra
     if (peer || localStream) {
         alert("A call is already in progress. Please end the current call first.");
         return;
@@ -568,7 +656,6 @@ async function startVideoCall(targetUser) {
         return;
     }
 
-    // Kiểm tra trạng thái kết nối SignalR
     if (connection.state !== signalR.HubConnectionState.Connected) {
         alert("Cannot start a call because the server connection is not active. Retrying connection...");
         await startConnection();
@@ -645,7 +732,6 @@ async function startVideoCall(targetUser) {
 connection.on("ReceiveSignal", async (sender, signalData) => {
     console.log("Received signal from " + sender);
 
-    // Kiểm tra trạng thái kết nối SignalR
     if (connection.state !== signalR.HubConnectionState.Connected) {
         console.error("Cannot process signal because SignalR connection is not active.");
         return;
