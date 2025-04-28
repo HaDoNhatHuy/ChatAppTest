@@ -57,8 +57,16 @@ document.addEventListener("DOMContentLoaded", async () => {
     });
 
     document.getElementById("scrollToBottomBtn").addEventListener("click", () => {
-        messagesList.scrollTop = messagesList.scrollHeight;
-        console.log("Scrolled to bottom via button");
+        const messagesList = document.getElementById("messagesList");
+        const lastMessage = messagesList.lastElementChild;
+        if (lastMessage) {
+            lastMessage.scrollIntoView({ behavior: "smooth", block: "end" });
+            console.log("Scrolled to bottom via button");
+        }
+        const scrollToBottomBtn = document.getElementById("scrollToBottomBtn");
+        if (scrollToBottomBtn) {
+            scrollToBottomBtn.classList.remove("active");
+        }
     });
 });
 
@@ -146,19 +154,20 @@ connection.on("ReceiveMessage", (sender, message, receiver, messageType = "Text"
             oldestMessageId = messageId;
         }
 
+        // Cuộn xuống tin nhắn cuối cùng
         const scrollToBottom = (retryCount = 0) => {
             setTimeout(() => {
-                const isNearBottom = messagesList.scrollTop + messagesList.clientHeight >= messagesList.scrollHeight - 50;
-                if (sender === currentUser || isNearBottom) {
-                    console.log(`Auto-scrolling to bottom. ScrollHeight: ${messagesList.scrollHeight}, ScrollTop: ${messagesList.scrollTop}, ClientHeight: ${messagesList.clientHeight}`);
-                    messagesList.scrollTop = messagesList.scrollHeight;
-                    setTimeout(() => {
-                        if (messagesList.scrollTop + messagesList.clientHeight < messagesList.scrollHeight - 50 && retryCount < 3) {
-                            console.log(`Scroll to bottom failed, retrying (${retryCount + 1})...`);
-                            scrollToBottom(retryCount + 1);
-                        }
-                    }, 100);
+                const lastMessage = messagesList.lastElementChild;
+                if (lastMessage) {
+                    lastMessage.scrollIntoView({ behavior: "smooth", block: "end" });
+                    console.log(`Auto-scrolled to bottom. ScrollHeight: ${messagesList.scrollHeight}, ScrollTop: ${messagesList.scrollTop}, ClientHeight: ${messagesList.clientHeight}`);
                 }
+                setTimeout(() => {
+                    if (messagesList.scrollTop + messagesList.clientHeight < messagesList.scrollHeight - 50 && retryCount < 3) {
+                        console.log(`Scroll to bottom failed, retrying (${retryCount + 1})...`);
+                        scrollToBottom(retryCount + 1);
+                    }
+                }, 100);
 
                 const scrollToBottomBtn = document.getElementById("scrollToBottomBtn");
                 if (scrollToBottomBtn) {
@@ -176,6 +185,19 @@ connection.on("ReceiveMessage", (sender, message, receiver, messageType = "Text"
         };
 
         scrollToBottom();
+
+        // Thêm sự kiện click cho tin nhắn để cuộn xuống dưới cùng
+        li.addEventListener("click", () => {
+            const lastMessage = messagesList.lastElementChild;
+            if (lastMessage) {
+                lastMessage.scrollIntoView({ behavior: "smooth", block: "end" });
+                console.log("Scrolled to bottom on message click");
+            }
+            const scrollToBottomBtn = document.getElementById("scrollToBottomBtn");
+            if (scrollToBottomBtn) {
+                scrollToBottomBtn.classList.remove("active");
+            }
+        });
 
         li.querySelector(".pin-button").addEventListener("click", () => {
             if (isPinned) {
@@ -252,6 +274,19 @@ connection.on("ReceiveOlderMessages", (messages) => {
             oldestMessageId = msg.Id;
         }
 
+        // Thêm sự kiện click cho tin nhắn để cuộn xuống dưới cùng
+        li.addEventListener("click", () => {
+            const lastMessage = messagesList.lastElementChild;
+            if (lastMessage) {
+                lastMessage.scrollIntoView({ behavior: "smooth", block: "end" });
+                console.log("Scrolled to bottom on older message click");
+            }
+            const scrollToBottomBtn = document.getElementById("scrollToBottomBtn");
+            if (scrollToBottomBtn) {
+                scrollToBottomBtn.classList.remove("active");
+            }
+        });
+
         li.querySelector(".pin-button").addEventListener("click", () => {
             if (msg.IsPinned) {
                 connection.invoke("UnpinMessage", currentUser, msg.Id).catch(err => console.error("Error unpinning message:", err));
@@ -296,8 +331,11 @@ connection.on("ReceiveNewMessageNotification", (sender) => {
                         const messagesList = document.getElementById("messagesList");
                         const scrollToBottom = (retryCount = 0) => {
                             setTimeout(() => {
-                                console.log(`Scroll height after loading messages (notification): ${messagesList.scrollHeight}, ScrollTop: ${messagesList.scrollTop}, ClientHeight: ${messagesList.clientHeight}`);
-                                messagesList.scrollTop = messagesList.scrollHeight;
+                                const lastMessage = messagesList.lastElementChild;
+                                if (lastMessage) {
+                                    lastMessage.scrollIntoView({ behavior: "smooth", block: "end" });
+                                    console.log(`Scroll height after loading messages (notification): ${messagesList.scrollHeight}, ScrollTop: ${messagesList.scrollTop}, ClientHeight: ${messagesList.clientHeight}`);
+                                }
                                 setTimeout(() => {
                                     if (messagesList.scrollTop + messagesList.clientHeight < messagesList.scrollHeight - 50 && retryCount < 3) {
                                         console.log(`Scroll to bottom failed after loading messages (notification), retrying (${retryCount + 1})...`);
@@ -449,8 +487,11 @@ connection.on("ReceiveFriends", (friends, friendStatuses) => {
                 const messagesList = document.getElementById("messagesList");
                 const scrollToBottom = (retryCount = 0) => {
                     setTimeout(() => {
-                        console.log(`Scroll height after loading messages: ${messagesList.scrollHeight}, ScrollTop: ${messagesList.scrollTop}, ClientHeight: ${messagesList.clientHeight}`);
-                        messagesList.scrollTop = messagesList.scrollHeight;
+                        const lastMessage = messagesList.lastElementChild;
+                        if (lastMessage) {
+                            lastMessage.scrollIntoView({ behavior: "smooth", block: "end" });
+                            console.log(`Scroll height after loading messages: ${messagesList.scrollHeight}, ScrollTop: ${messagesList.scrollTop}, ClientHeight: ${messagesList.clientHeight}`);
+                        }
                         setTimeout(() => {
                             if (messagesList.scrollTop + messagesList.clientHeight < messagesList.scrollHeight - 50 && retryCount < 3) {
                                 console.log(`Scroll to bottom failed after loading messages, retrying (${retryCount + 1})...`);
@@ -603,8 +644,11 @@ document.getElementById("searchUser").addEventListener("input", async () => {
                         const messagesList = document.getElementById("messagesList");
                         const scrollToBottom = (retryCount = 0) => {
                             setTimeout(() => {
-                                console.log(`Scroll height after loading messages: ${messagesList.scrollHeight}, ScrollTop: ${messagesList.scrollTop}, ClientHeight: ${messagesList.clientHeight}`);
-                                messagesList.scrollTop = messagesList.scrollHeight;
+                                const lastMessage = messagesList.lastElementChild;
+                                if (lastMessage) {
+                                    lastMessage.scrollIntoView({ behavior: "smooth", block: "end" });
+                                    console.log(`Scroll height after loading messages: ${messagesList.scrollHeight}, ScrollTop: ${messagesList.scrollTop}, ClientHeight: ${messagesList.clientHeight}`);
+                                }
                                 setTimeout(() => {
                                     if (messagesList.scrollTop + messagesList.clientHeight < messagesList.scrollHeight - 50 && retryCount < 3) {
                                         console.log(`Scroll to bottom failed after loading messages, retrying (${retryCount + 1})...`);
@@ -696,11 +740,6 @@ document.getElementById("fileInput").addEventListener("change", async () => {
 async function startVideoCall(targetUser) {
     if (peer || localStream) {
         alert("A call is already in progress. Please end the current call first.");
-        return;
-    }
-
-    if (!currentFriend) {
-        alert("Please select a friend to call.");
         return;
     }
 

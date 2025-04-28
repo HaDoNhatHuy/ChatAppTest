@@ -177,7 +177,51 @@ namespace HermesChatApp.Hubs
                 await Clients.Caller.SendAsync("ReceiveError", "Failed to send file.");
             }
         }
+        //public async Task LoadMessages(string currentUser, string friend)
+        //{
+        //    try
+        //    {
+        //        var currentUserEntity = await _context.Users.FirstOrDefaultAsync(u => u.Username == currentUser);
+        //        var friendEntity = await _context.Users.FirstOrDefaultAsync(u => u.Username == friend);
+        //        if (currentUserEntity == null || friendEntity == null)
+        //        {
+        //            await Clients.Caller.SendAsync("ReceiveError", "User or friend not found.");
+        //            return;
+        //        }
 
+        //        var messages = await _context.Messages
+        //            .Where(m =>
+        //                (m.SenderId == currentUserEntity.Id && m.ReceiverId == friendEntity.Id) ||
+        //                (m.SenderId == friendEntity.Id && m.ReceiverId == currentUserEntity.Id))
+        //            .OrderByDescending(m => m.Timestamp) // Sắp xếp giảm dần để lấy tin nhắn mới nhất trước
+        //            .Take(50) // Lấy 50 tin nhắn gần nhất
+        //            .OrderBy(m => m.Timestamp) // Sắp xếp lại tăng dần để hiển thị đúng thứ tự
+        //            .Select(m => new
+        //            {
+        //                m.Id,
+        //                m.Content,
+        //                m.MessageType,
+        //                m.FileUrl,
+        //                m.IsPinned,
+        //                m.Timestamp,
+        //                SenderUsername = m.Sender.Username,
+        //                ReceiverUsername = m.Receiver.Username
+        //            })
+        //            .ToListAsync();
+
+        //        foreach (var msg in messages)
+        //        {
+        //            await Clients.Caller.SendAsync("ReceiveMessage", msg.SenderUsername, msg.Content, msg.ReceiverUsername, msg.MessageType, msg.FileUrl, msg.IsPinned, msg.Id, msg.Timestamp.ToString("o"));
+        //        }
+
+        //        await MarkMessagesAsRead(currentUser, friend);
+        //    }
+        //    catch (Exception ex)
+        //    {
+        //        Console.WriteLine($"Error in LoadMessages: {ex.Message}");
+        //        await Clients.Caller.SendAsync("ReceiveError", "Failed to load messages.");
+        //    }
+        //}
         public async Task LoadMessages(string currentUser, string friend)
         {
             try
@@ -194,9 +238,9 @@ namespace HermesChatApp.Hubs
                     .Where(m =>
                         (m.SenderId == currentUserEntity.Id && m.ReceiverId == friendEntity.Id) ||
                         (m.SenderId == friendEntity.Id && m.ReceiverId == currentUserEntity.Id))
-                    .OrderByDescending(m => m.Timestamp) // Sắp xếp giảm dần để lấy tin nhắn mới nhất trước
-                    .Take(50) // Lấy 50 tin nhắn gần nhất
-                    .OrderBy(m => m.Timestamp) // Sắp xếp lại tăng dần để hiển thị đúng thứ tự
+                    .OrderByDescending(m => m.Timestamp) // Lấy 50 tin nhắn mới nhất
+                    .Take(50)
+                    .OrderBy(m => m.Timestamp) // Sắp xếp tăng dần để gửi tin nhắn cũ trước, mới sau
                     .Select(m => new
                     {
                         m.Id,
@@ -210,6 +254,7 @@ namespace HermesChatApp.Hubs
                     })
                     .ToListAsync();
 
+                // Gửi danh sách tin nhắn cho client theo thứ tự tăng dần
                 foreach (var msg in messages)
                 {
                     await Clients.Caller.SendAsync("ReceiveMessage", msg.SenderUsername, msg.Content, msg.ReceiverUsername, msg.MessageType, msg.FileUrl, msg.IsPinned, msg.Id, msg.Timestamp.ToString("o"));
@@ -223,7 +268,6 @@ namespace HermesChatApp.Hubs
                 await Clients.Caller.SendAsync("ReceiveError", "Failed to load messages.");
             }
         }
-
         public async Task PinMessage(string user, int messageId)
         {
             try

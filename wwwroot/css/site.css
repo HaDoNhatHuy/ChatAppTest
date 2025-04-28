@@ -719,7 +719,7 @@
 
 .scroll-to-bottom {
     position: absolute;
-    bottom: 20px;
+    bottom: 90px;
     right: 20px;
     border-radius: 50%;
     width: 40px;
@@ -740,12 +740,36 @@
         opacity: 1;
         animation: bounce 1s infinite alternate;
     }
-
     .scroll-to-bottom:hover {
         transform: translateY(-2px);
         background-color: #0084ff;
         color: #fff;
     }
+
+/*.scroll-to-bottom {
+    position: absolute;
+    bottom: 80px;*/ /* Đặt phía trên typing indicator và input area */
+    /*right: 20px;*/
+    /*display: none;*/ /* Ẩn mặc định */
+    /*padding: 8px;
+    font-size: 0.9rem;
+    background-color: #007bff;
+    color: white;
+    border: none;
+    border-radius: 50%;
+    cursor: pointer;
+    transition: opacity 0.3s ease;
+    z-index: 10;
+}
+
+    .scroll-to-bottom.active {
+        display: block;*/ /* Hiện nút khi có class active */
+    /*}
+
+    .scroll-to-bottom:hover {
+        background-color: #0056b3;
+    }*/
+    
 
 .date-divider {
     text-align: center;
