@@ -11,6 +11,7 @@ let remoteUser = null;
 let typingTimeout = null;
 let oldestMessageId = null;
 let isLoadingMessages = false;
+let friendsList = [];
 
 document.addEventListener("DOMContentLoaded", async () => {
     console.log("DOM loaded, initializing chat...");
@@ -403,6 +404,7 @@ connection.on("ReceiveUserStatus", (username, isOnline) => {
 });
 
 connection.on("ReceiveFriends", (friends, friendStatuses) => {
+    friendsList = friends;
     const friendList = document.getElementById("friendList");
     friendList.innerHTML = "";
     friends.sort((a, b) => a.localeCompare(b));
@@ -566,16 +568,62 @@ document.getElementById("searchUser").addEventListener("input", async () => {
         data.users.forEach(user => {
             const div = document.createElement("div");
             div.className = "user-item";
+            const isFriend = friendsList.includes(user);
             div.innerHTML = `
                 <span>${user}</span>
-                <button class="btn btn-primary btn-sm"><i class="fas fa-user-plus"></i></button>
+                ${isFriend ? '<button class="btn btn-secondary btn-sm">Chat</button>' : '<button class="btn btn-primary btn-sm"><i class="fas fa-user-plus"></i></button>'}
             `;
-            div.querySelector("button").onclick = () => {
-                console.log(`Sending friend request from ${currentUser} to ${user}`);
-                connection.invoke("SendFriendRequest", currentUser, user).catch(err => {
-                    console.error("Error sending friend request:", err);
-                });
-            };
+            if (isFriend) {
+                div.querySelector("button").onclick = () => {
+                    currentFriend = user;
+                    localStorage.setItem("currentFriend", currentFriend);
+                    document.getElementById("chat-intro").textContent = `Chat with ${user}`;
+                    document.getElementById("messagesList").innerHTML = "";
+                    oldestMessageId = null;
+                    const loadingSpinner = document.getElementById("loadingSpinner");
+                    if (loadingSpinner) {
+                        loadingSpinner.classList.add("active");
+                    }
+
+                    const pendingMessages = JSON.parse(localStorage.getItem("pendingMessages") || "{}");
+                    if (pendingMessages[user]) {
+                        pendingMessages[user].forEach(msg => {
+                            connection.invoke("ReceiveMessage", msg.sender, msg.message, msg.receiver, msg.messageType, msg.fileUrl, msg.isPinned, msg.messageId, msg.timestamp);
+                        });
+                        delete pendingMessages[user];
+                        localStorage.setItem("pendingMessages", JSON.stringify(pendingMessages));
+                    }
+
+                    connection.invoke("LoadMessages", currentUser, user).catch(err => {
+                        console.error("Error loading messages:", err);
+                    }).finally(() => {
+                        if (loadingSpinner) {
+                            loadingSpinner.classList.remove("active");
+                        }
+                        const messagesList = document.getElementById("messagesList");
+                        const scrollToBottom = (retryCount = 0) => {
+                            setTimeout(() => {
+                                console.log(`Scroll height after loading messages: ${messagesList.scrollHeight}, ScrollTop: ${messagesList.scrollTop}, ClientHeight: ${messagesList.clientHeight}`);
+                                messagesList.scrollTop = messagesList.scrollHeight;
+                                setTimeout(() => {
+                                    if (messagesList.scrollTop + messagesList.clientHeight < messagesList.scrollHeight - 50 && retryCount < 3) {
+                                        console.log(`Scroll to bottom failed after loading messages, retrying (${retryCount + 1})...`);
+                                        scrollToBottom(retryCount + 1);
+                                    }
+                                }, 100);
+                            }, 300);
+                        };
+                        scrollToBottom();
+                    });
+                };
+            } else {
+                div.querySelector("button").onclick = () => {
+                    console.log(`Sending friend request from ${currentUser} to ${user}`);
+                    connection.invoke("SendFriendRequest", currentUser, user).catch(err => {
+                        console.error("Error sending friend request:", err);
+                    });
+                };
+            }
             searchResults.appendChild(div);
         });
     } else {
