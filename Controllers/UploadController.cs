@@ -14,7 +14,7 @@ namespace HermesChatApp.Controllers
             const long maxFileSize = 10 * 1024 * 1024; // 10MB
             if (file.Length > maxFileSize) return BadRequest("File size exceeds 10MB limit.");
 
-            var allowedExtensions = new[] { ".jpg", ".jpeg", ".png", ".pdf", ".doc", ".docx" };
+            var allowedExtensions = new[] { ".jpg", ".jpeg", ".png", ".pdf", ".doc", ".docx",".gif" };
             var extension = Path.GetExtension(file.FileName).ToLower();
             if (!allowedExtensions.Contains(extension))
             {

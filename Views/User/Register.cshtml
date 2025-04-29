@@ -2,47 +2,61 @@
 @{
     ViewData["Title"] = "Register";
 }
-@section Scripts {
-    <script src="~/js/passwordValidation.js"></script>
-}
 
 <div class="container my-5">
     <div class="row justify-content-center">
         <div class="col-md-8">
-            <div class="card shadow border-0">
-                <div class="card-header bg-gradient text-white text-center py-3" style="background-color: #4361ee;">
-                    <h3 class="mb-0"><i class="fas fa-user-plus me-2"></i>Create Your Account</h3>
+            <div class="card shadow-lg border-0 animated fadeIn">
+                <div class="card-header bg-gradient text-white text-center p-4 position-relative overflow-hidden">
+                    <div class="position-absolute bubble bubble-1"></div>
+                    <div class="position-absolute bubble bubble-2"></div>
+                    <div class="position-absolute bubble bubble-3"></div>
+                    <div class="position-relative">
+                        <div class="logo-container mx-auto mb-3">
+                            <i class="fas fa-user-plus logo-icon"></i>
+                        </div>
+                        <h2 class="mb-0 fw-bold">Join Hermes</h2>
+                        <p class="text-light mb-0 opacity-75">Create your account</p>
+                    </div>
                 </div>
+                
                 <div class="card-body p-4">
                     @if (ViewBag.Error != null)
                     {
-                        <div class="alert alert-danger text-center shadow-sm">
+                        <div class="alert alert-danger text-center shadow-sm alert-dismissible fade show">
                             <i class="fas fa-exclamation-circle me-2"></i>@ViewBag.Error
+                            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
                         </div>
                     }
 
-                    <form method="post">
+                    <form method="post" class="register-form">
                         <div asp-validation-summary="ModelOnly" class="text-danger"></div>
+
+                        <div class="progress mb-4 bg-light" style="height: 6px">
+                            <div class="progress-bar" role="progressbar" style="width: 0%" id="register-progress"></div>
+                        </div>
 
                         <div class="row mb-4">
                             <div class="col-md-6 mb-4 mb-md-0">
                                 <label asp-for="Username" class="form-label fw-bold">Username</label>
-                                <div class="input-group input-group-lg shadow-sm">
-                                    <span class="input-group-text bg-light border-end-0">
+                                <div class="input-group input-group-lg form-floating floating-icon">
+                                    <span class="input-group-text bg-transparent border-end-0">
                                         <i class="fas fa-user text-primary"></i>
                                     </span>
-                                    <input asp-for="Username" class="form-control border-start-0" placeholder="Choose a username" />
+                                    <input asp-for="Username" class="form-control border-start-0" placeholder="Choose a username" id="username" />
+                                    <label for="username">Choose a username</label>
                                 </div>
                                 <span asp-validation-for="Username" class="text-danger mt-1"></span>
                             </div>
 
                             <div class="col-md-6">
                                 <label asp-for="Email" class="form-label fw-bold">Email</label>
-                                <div class="input-group input-group-lg shadow-sm">
-                                    <span class="input-group-text bg-light border-end-0">
+                                <div class="input-group input-group-lg form-floating floating-icon">
+                                    <span class="input-group-text bg-transparent border-end-0">
                                         <i class="fas fa-envelope text-primary"></i>
                                     </span>
-                                    <input asp-for="Email" class="form-control border-start-0" placeholder="Enter your email" />
+                                    <input asp-for="Email" class="form-control border-start-0" placeholder="Enter your email" id="email" />
+                                    <label for="email">Enter your email</label>
                                 </div>
                                 <span asp-validation-for="Email" class="text-danger mt-1"></span>
                             </div>
@@ -50,54 +64,83 @@
 
                         <div class="mb-4">
                             <label asp-for="PasswordHash" class="form-label fw-bold">Password</label>
-                            <div class="input-group input-group-lg shadow-sm">
-                                <span class="input-group-text bg-light border-end-0">
+                            <div class="input-group input-group-lg form-floating floating-icon">
+                                <span class="input-group-text bg-transparent border-end-0">
                                     <i class="fas fa-lock text-primary"></i>
                                 </span>
-                                <input asp-for="PasswordHash" type="password" class="form-control border-start-0" id="new1Password" placeholder="Create a password" />
+                                <input asp-for="PasswordHash" type="password" class="form-control border-start-0 border-end-0" id="new1Password" placeholder="Create a password" />
+                                <label for="new1Password">Create a password</label>
+                                <span class="input-group-text bg-transparent border-start-0 password-toggle" onclick="togglePassword('new1Password')">
+                                    <i class="far fa-eye-slash" id="new1Password-icon"></i>
+                                </span>
                             </div>
                             <span asp-validation-for="PasswordHash" class="text-danger mt-1"></span>
 
-                            <div id="pswd_info" class="mt-3 p-3 border rounded bg-light">
-                                <h6 class="fw-bold text-primary"><i class="fas fa-shield-alt me-2"></i>Password Requirements:</h6>
-                                <ul class="list-unstyled mb-0">
-                                    <li id="letter" class="invalid"><i class="fas fa-check me-2"></i>At least <strong>one lowercase letter</strong></li>
-                                    <li id="capital" class="invalid"><i class="fas fa-check me-2"></i>At least <strong>one uppercase letter</strong></li>
-                                    <li id="number" class="invalid"><i class="fas fa-check me-2"></i>At least <strong>one number</strong></li>
-                                    <li id="length" class="invalid"><i class="fas fa-check me-2"></i>At least <strong>8 characters</strong></li>
-                                    <li id="special" class="invalid"><i class="fas fa-check me-2"></i>At least <strong>one special character</strong></li>
+                            <div id="pswd_info" class="mt-3 p-3 border rounded bg-light shadow-sm">
+                                <h6 class="fw-bold text-primary mb-3"><i class="fas fa-shield-alt me-2"></i>Password Strength</h6>
+                                <div class="password-strength-meter mb-3">
+                                    <div class="strength-segment" id="strength-1"></div>
+                                    <div class="strength-segment" id="strength-2"></div>
+                                    <div class="strength-segment" id="strength-3"></div>
+                                    <div class="strength-segment" id="strength-4"></div>
+                                </div>
+                                <div class="password-strength-text mb-3" id="strength-text">Password strength: Too weak</div>
+                                <ul class="list-group list-group-flush">
+                                    <li class="list-group-item bg-transparent d-flex align-items-center invalid" id="letter">
+                                        <i class="fas fa-times-circle me-2"></i>At least <strong>one lowercase letter</strong>
+                                    </li>
+                                    <li class="list-group-item bg-transparent d-flex align-items-center invalid" id="capital">
+                                        <i class="fas fa-times-circle me-2"></i>At least <strong>one uppercase letter</strong>
+                                    </li>
+                                    <li class="list-group-item bg-transparent d-flex align-items-center invalid" id="number">
+                                        <i class="fas fa-times-circle me-2"></i>At least <strong>one number</strong>
+                                    </li>
+                                    <li class="list-group-item bg-transparent d-flex align-items-center invalid" id="length">
+                                        <i class="fas fa-times-circle me-2"></i>At least <strong>8 characters</strong>
+                                    </li>
+                                    <li class="list-group-item bg-transparent d-flex align-items-center invalid" id="special">
+                                        <i class="fas fa-times-circle me-2"></i>At least <strong>one special character</strong>
+                                    </li>
                                 </ul>
                             </div>
                         </div>
 
                         <div class="mb-4">
                             <label class="form-label fw-bold">Confirm Password</label>
-                            <div class="input-group input-group-lg shadow-sm">
-                                <span class="input-group-text bg-light border-end-0">
+                            <div class="input-group input-group-lg form-floating floating-icon">
+                                <span class="input-group-text bg-transparent border-end-0">
                                     <i class="fas fa-lock text-primary"></i>
                                 </span>
-                                <input type="password" name="ConfirmPassword" class="form-control border-start-0" id="new2Password" placeholder="Confirm your password" />
+                                <input type="password" name="ConfirmPassword" class="form-control border-start-0 border-end-0" id="new2Password" placeholder="Confirm your password" />
+                                <label for="new2Password">Confirm your password</label>
+                                <span class="input-group-text bg-transparent border-start-0 password-toggle" onclick="togglePassword('new2Password')">
+                                    <i class="far fa-eye-slash" id="new2Password-icon"></i>
+                                </span>
                             </div>
                             <div id="pswd_equal" class="mt-2">
                                 <ul class="list-unstyled">
-                                    <li id="match" class="invalid"><i class="fas fa-check me-2"></i>Passwords must match</li>
+                                    <li id="match" class="invalid d-flex align-items-center">
+                                        <i class="fas fa-times-circle me-2"></i>Passwords must match
+                                    </li>
                                 </ul>
                             </div>
                         </div>
 
-                        <div class="mb-4 form-check">
-                            <input type="checkbox" class="form-check-input" id="agreeTerms" required>
-                            <label class="form-check-label" for="agreeTerms">
-                                I agree to the <a href="#" class="text-primary">Terms of Service</a> and <a href="#" class="text-primary">Privacy Policy</a>
-                            </label>
+                        <div class="mb-4">
+                            <div class="form-check custom-checkbox-container">
+                                <input type="checkbox" class="form-check-input custom-checkbox" id="agreeTerms" required>
+                                <label class="form-check-label ms-2" for="agreeTerms">
+                                    I agree to the <a href="#" class="text-primary">Terms of Service</a> and <a href="#" class="text-primary">Privacy Policy</a>
+                                </label>
+                            </div>
                         </div>
 
-                        <button type="submit" class="btn btn-primary btn-lg w-100 shadow-sm">
+                        <button type="submit" class="btn btn-primary btn-lg w-100 shadow pulse-btn">
                             <i class="fas fa-user-plus me-2"></i>Create Account
                         </button>
                     </form>
                 </div>
-                <div class="card-footer bg-light text-center py-3">
+                <div class="card-footer bg-light text-center py-4">
                     <p class="mb-0">
                         Already have an account?
                         <a asp-controller="User" asp-action="Login" class="text-primary fw-bold">Login</a>
@@ -107,40 +150,11 @@
         </div>
     </div>
 </div>
+@section Scripts{
+    <script src="/js/registerScripts.js"></script>
+    <script src="/js/passwordValidation.js"></script>
+}
 
-<style>
-    .card {
-        border-radius: 15px;
-        overflow: hidden;
-    }
-
-    .input-group-text {
-        border-radius: 10px 0 0 10px;
-    }
-
-    .form-control {
-        border-radius: 0 10px 10px 0;
-    }
-
-    .invalid {
-        color: #dc3545;
-    }
-
-    .valid {
-        color: #28a745;
-    }
-
-    .btn-primary {
-        background-color: #4361ee;
-        border-color: #4361ee;
-    }
-
-        .btn-primary:hover {
-            background-color: #3a56d4;
-            border-color: #3a56d4;
-        }
-
-    #pswd_info {
-        background-color: #f8f9fa;
-    }
-</style>
+@section Css{
+    <link rel="stylesheet" href="/css/registerStyle.css" />
+}

@@ -1,0 +1,237 @@
+﻿
+:root {
+    --primary-color: #4361ee;
+    --primary-dark: #3a56d4;
+    --primary-light: #eef1ff;
+    --secondary-color: #6c63ff;
+    --accent-color: #f72585;
+}
+
+.card {
+    border-radius: 20px;
+    overflow: hidden;
+    transition: all 0.3s;
+}
+
+.card-header {
+    background: linear-gradient(135deg, var(--primary-color), var(--secondary-color));
+    border-bottom: none;
+}
+
+.logo-container {
+    background-color: white;
+    width: 80px;
+    height: 80px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 10px 20px rgba(0,0,0,0.1);
+}
+
+.logo-icon {
+    font-size: 35px;
+    color: var(--primary-color);
+}
+
+.bubble {
+    border-radius: 50%;
+    background-color: rgba(255, 255, 255, 0.1);
+}
+
+.bubble-1 {
+    width: 100px;
+    height: 100px;
+    top: -30px;
+    left: -30px;
+}
+
+.bubble-2 {
+    width: 60px;
+    height: 60px;
+    bottom: 20px;
+    right: 20px;
+}
+
+.bubble-3 {
+    width: 40px;
+    height: 40px;
+    top: 20px;
+    right: 50px;
+}
+
+.form-control, .input-group-text {
+    height: 58px;
+    font-size: 16px;
+    border-color: #e0e0e0;
+}
+
+    .form-control:focus {
+        box-shadow: none;
+        border-color: var(--primary-color);
+    }
+
+.input-group-text {
+    width: 50px;
+    justify-content: center;
+}
+
+.floating-icon .input-group-text {
+    z-index: 4;
+}
+
+.form-floating > label {
+    padding-left: 60px;
+}
+
+.form-floating > .form-control {
+    padding-left: 60px;
+}
+
+.password-toggle {
+    cursor: pointer;
+    width: 50px;
+}
+
+    .password-toggle:hover {
+        color: var(--primary-color);
+    }
+
+.custom-checkbox {
+    width: 18px;
+    height: 18px;
+    border-radius: 4px;
+    border-color: var(--primary-color);
+}
+
+    .custom-checkbox:checked {
+        background-color: var(--primary-color);
+        border-color: var(--primary-color);
+    }
+
+.btn-primary {
+    background: linear-gradient(to right, var(--primary-color), var(--secondary-color));
+    border: none;
+    padding: 12px;
+    font-weight: 600;
+    border-radius: 12px;
+    transition: all 0.3s;
+}
+
+    .btn-primary:hover, .btn-primary:focus {
+        background: linear-gradient(to right, var(--secondary-color), var(--primary-color));
+        box-shadow: 0 5px 15px rgba(67, 97, 238, 0.4);
+        transform: translateY(-2px);
+    }
+
+.divider {
+    width: 100%;
+    text-align: center;
+    border-bottom: 1px solid #e0e0e0;
+    line-height: 0.1em;
+    margin: 25px 0;
+}
+
+    .divider span {
+        background: #fff;
+        padding: 0 15px;
+        font-size: 12px;
+        font-weight: 600;
+    }
+
+.social-login {
+    display: flex;
+    justify-content: center;
+    gap: 15px;
+}
+
+.social-btn {
+    width: 50px;
+    height: 50px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 18px;
+    transition: all 0.3s;
+}
+
+.google-btn {
+    color: #DB4437;
+    border-color: #DB4437;
+}
+
+    .google-btn:hover {
+        background-color: #DB4437;
+        color: white;
+    }
+
+.facebook-btn {
+    color: #4267B2;
+    border-color: #4267B2;
+}
+
+    .facebook-btn:hover {
+        background-color: #4267B2;
+        color: white;
+    }
+
+.apple-btn {
+    color: #000;
+    border-color: #000;
+}
+
+    .apple-btn:hover {
+        background-color: #000;
+        color: white;
+    }
+
+.card-footer {
+    background-color: rgba(238, 241, 255, 0.5);
+    border-top: none;
+}
+
+.animated {
+    animation-duration: 0.5s;
+    animation-fill-mode: both;
+}
+
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(20px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.fadeIn {
+    animation-name: fadeIn;
+}
+
+.pulse-btn:active {
+    animation: pulse 0.3s;
+}
+
+@keyframes pulse {
+    0% {
+        transform: scale(1);
+    }
+
+    50% {
+        transform: scale(0.98);
+    }
+
+    100% {
+        transform: scale(1);
+    }
+}
+
+@media (max-width: 768px) {
+    .container {
+        padding: 0 15px;
+    }
+}

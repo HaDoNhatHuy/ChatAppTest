@@ -1,8 +1,326 @@
 ﻿@{
-    ViewData["Title"] = "Home Page";
+    ViewData["Title"] = "HermesChat - Welcome";
 }
 
-<div class="text-center">
-    <h1 class="display-4">Welcome</h1>
-    <p>Learn about <a href="https://learn.microsoft.com/aspnet/core">building Web apps with ASP.NET Core</a>.</p>
+<div class="hero-section position-relative">
+    <!-- Animated Background Elements -->
+    <div class="animated-bg">
+        <div class="circles"></div>
+    </div>
+
+    <!-- Main Content -->
+    <div class="container">
+        <div class="row align-items-center min-vh-80">
+            <div class="col-lg-6 hero-content text-white">
+                <h1 class="hero-title fw-bold mb-4">Connect Beyond <span class="text-gradient">Messages</span></h1>
+                <p class="hero-description mb-4">
+                    Experience communication reimagined with HermesChat. Share moments, connect with friends, and enjoy seamless real-time conversations in a secure environment.
+                </p>
+
+                <!-- Call to Action Buttons -->
+                <div class="cta-buttons">
+                    @if (Context.Session.GetString("Username") != null)
+                    {
+                        <a asp-controller="Chat" asp-action="Index" class="btn btn-gradient btn-lg rounded-pill me-3 shadow">
+                            <i class="fas fa-comments me-2"></i>Start Chatting
+                        </a>
+                    }
+                    else
+                    {
+                        <a asp-controller="User" asp-action="Login" class="btn btn-gradient btn-lg rounded-pill me-3 shadow">
+                            <i class="fas fa-sign-in-alt me-2"></i>Login
+                        </a>
+                        <a asp-controller="User" asp-action="Register" class="btn btn-outline-light btn-lg rounded-pill shadow-hover">
+                            <i class="fas fa-user-plus me-2"></i>Sign Up
+                        </a>
+                    }
+                </div>
+            </div>
+            <div class="col-lg-6 d-none d-lg-block">
+                <div class="hero-image-container position-relative">
+                    <div class="message-bubbles">
+                        <div class="bubble user-bubble shadow">
+                            <div class="bubble-content">
+                                <div class="bubble-avatar">
+                                    <img src="/images/avatars/Marina.jpg" alt="User avatar" class="rounded-circle" />
+                                </div>
+                                <div class="bubble-text">
+                                    <p>Hey there! How's everything going?</p>
+                                    <span class="bubble-time">11:24 AM</span>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="bubble friend-bubble shadow">
+                            <div class="bubble-content">
+                                <div class="bubble-avatar">
+                                    <img src="/images/avatars/Peter.jpg" alt="Friend avatar" class="rounded-circle" />
+                                </div>
+                                <div class="bubble-text">
+                                    <p>All good! Just checking out this new chat app. The interface is amazing!</p>
+                                    <span class="bubble-time">11:26 AM</span>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="bubble user-bubble shadow">
+                            <div class="bubble-content">
+                                <div class="bubble-avatar">
+                                    <img src="/images/avatars/John.jpg" alt="User avatar" class="rounded-circle" />
+                                </div>
+                                <div class="bubble-text">
+                                    <p>I know right? So smooth and intuitive!</p>
+                                    <span class="bubble-time">11:27 AM</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Wave Separator -->
+    <div class="wave-separator">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1440 320">
+            <path fill="#ffffff" fill-opacity="1" d="M0,96L48,112C96,128,192,160,288,160C384,160,480,128,576,112C672,96,768,96,864,106.7C960,117,1056,139,1152,138.7C1248,139,1344,117,1392,106.7L1440,96L1440,320L1392,320C1344,320,1248,320,1152,320C1056,320,960,320,864,320C768,320,672,320,576,320C480,320,384,320,288,320C192,320,96,320,48,320L0,320Z"></path>
+        </svg>
+    </div>
 </div>
+
+<!-- Features Section -->
+<section class="features py-5">
+    <div class="container">
+        <div class="section-header text-center mb-5">
+            <h2 class="section-title fw-bold">Why Choose <span class="text-primary">HermesChat</span>?</h2>
+            <p class="section-subtitle">Discover the features that make us stand out</p>
+        </div>
+
+        <div class="row g-4">
+            <div class="col-md-4">
+                <div class="feature-card h-100">
+                    <div class="card-body">
+                        <div class="feature-icon-wrapper mb-4">
+                            <div class="feature-icon">
+                                <i class="fas fa-bolt"></i>
+                            </div>
+                        </div>
+                        <h4 class="feature-title">Real-Time Messaging</h4>
+                        <p class="feature-text">Send and receive messages instantly with our lightning-fast platform, designed for smooth communication.</p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-md-4">
+                <div class="feature-card h-100">
+                    <div class="card-body">
+                        <div class="feature-icon-wrapper mb-4">
+                            <div class="feature-icon">
+                                <i class="fas fa-video"></i>
+                            </div>
+                        </div>
+                        <h4 class="feature-title">Crystal-Clear Video Calls</h4>
+                        <p class="feature-text">Connect face-to-face with high-definition video calls that bring your conversations to life.</p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-md-4">
+                <div class="feature-card h-100">
+                    <div class="card-body">
+                        <div class="feature-icon-wrapper mb-4">
+                            <div class="feature-icon">
+                                <i class="fas fa-shield-alt"></i>
+                            </div>
+                        </div>
+                        <h4 class="feature-title">Advanced Security</h4>
+                        <p class="feature-text">Your privacy matters. Enjoy peace of mind with our end-to-end encryption and cutting-edge security measures.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- Testimonials Section -->
+<section class="testimonials py-5 bg-light">
+    <div class="container">
+        <div class="section-header text-center mb-5">
+            <h2 class="section-title fw-bold">What Users Are <span class="text-primary">Saying</span></h2>
+            <p class="section-subtitle">Join thousands of satisfied users around the world</p>
+        </div>
+
+        <div class="row">
+            <div class="col-lg-4 col-md-6 mb-4">
+                <div class="testimonial-card">
+                    <div class="testimonial-content">
+                        <div class="testimonial-rating mb-3">
+                            <i class="fas fa-star"></i>
+                            <i class="fas fa-star"></i>
+                            <i class="fas fa-star"></i>
+                            <i class="fas fa-star"></i>
+                            <i class="fas fa-star"></i>
+                        </div>
+                        <p class="testimonial-text">"HermesChat has completely transformed how I stay in touch with friends and family. The interface is intuitive and beautiful!"</p>
+                    </div>
+                    <div class="testimonial-user d-flex align-items-center mt-3">
+                        <div class="testimonial-avatar">
+                            <img src="/images/avatars/Mary.jpg" alt="User avatar" class="rounded-circle" />
+                        </div>
+                        <div class="testimonial-info ms-3">
+                            <h5 class="testimonial-name mb-0">Sophia Chen</h5>
+                            <p class="testimonial-title text-muted mb-0">Designer</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-lg-4 col-md-6 mb-4">
+                <div class="testimonial-card">
+                    <div class="testimonial-content">
+                        <div class="testimonial-rating mb-3">
+                            <i class="fas fa-star"></i>
+                            <i class="fas fa-star"></i>
+                            <i class="fas fa-star"></i>
+                            <i class="fas fa-star"></i>
+                            <i class="fas fa-star"></i>
+                        </div>
+                        <p class="testimonial-text">"The video call quality is outstanding, and I love how secure everything feels. Best messaging platform I've used!"</p>
+                    </div>
+                    <div class="testimonial-user d-flex align-items-center mt-3">
+                        <div class="testimonial-avatar">
+                            <img src="/images/avatars/Ben.jpg" alt="User avatar" class="rounded-circle" />
+                        </div>
+                        <div class="testimonial-info ms-3">
+                            <h5 class="testimonial-name mb-0">Marcus Johnson</h5>
+                            <p class="testimonial-title text-muted mb-0">Developer</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-lg-4 col-md-6 mb-4 mx-auto">
+                <div class="testimonial-card">
+                    <div class="testimonial-content">
+                        <div class="testimonial-rating mb-3">
+                            <i class="fas fa-star"></i>
+                            <i class="fas fa-star"></i>
+                            <i class="fas fa-star"></i>
+                            <i class="fas fa-star"></i>
+                            <i class="fas fa-star-half-alt"></i>
+                        </div>
+                        <p class="testimonial-text">"Our team switched to HermesChat for all our communications, and productivity has never been better. Highly recommend!"</p>
+                    </div>
+                    <div class="testimonial-user d-flex align-items-center mt-3">
+                        <div class="testimonial-avatar">
+                            <img src="/images/avatars/Cristiana.jpg" alt="User avatar" class="rounded-circle" />
+                        </div>
+                        <div class="testimonial-info ms-3">
+                            <h5 class="testimonial-name mb-0">Elena Rodriguez</h5>
+                            <p class="testimonial-title text-muted mb-0">Team Lead</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- Call to Action -->
+<section class="cta py-5">
+    <div class="container">
+        <div class="cta-container text-center py-5">
+            <h2 class="cta-title text-white mb-4">Ready to Experience HermesChat?</h2>
+            <p class="cta-text text-white mb-4">Join millions of users enjoying seamless communication every day.</p>
+            <div class="cta-buttons">
+                @if (Context.Session.GetString("Username") != null)
+                {
+                    <a asp-controller="Chat" asp-action="Index" class="btn btn-light btn-lg rounded-pill">
+                        <i class="fas fa-comments me-2"></i>Go to Your Chats
+                    </a>
+                }
+                else
+                {
+                    <a asp-controller="User" asp-action="Register" class="btn btn-light btn-lg rounded-pill">
+                        <i class="fas fa-user-plus me-2"></i>Get Started for Free
+                    </a>
+                }
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- Footer -->
+<footer class="footer py-4 bg-dark text-white">
+    <div class="container">
+        <div class="row">
+            <div class="col-md-6">
+                <h4 class="footer-logo mb-3">HermesChat</h4>
+                <p class="footer-tagline mb-4">Connecting people, one message at a time.</p>
+                <div class="social-icons">
+                    <a href="#" class="social-icon"><i class="fab fa-facebook-f"></i></a>
+                    <a href="#" class="social-icon"><i class="fab fa-twitter"></i></a>
+                    <a href="#" class="social-icon"><i class="fab fa-instagram"></i></a>
+                    <a href="#" class="social-icon"><i class="fab fa-linkedin-in"></i></a>
+                </div>
+            </div>
+            <div class="col-md-2 mt-4 mt-md-0">
+                <h5 class="footer-heading">Company</h5>
+                <ul class="footer-links">
+                    <li><a href="#">About</a></li>
+                    <li><a href="#">Careers</a></li>
+                    <li><a href="#">Blog</a></li>
+                    <li><a href="#">Contact</a></li>
+                </ul>
+            </div>
+            <div class="col-md-2 mt-4 mt-md-0">
+                <h5 class="footer-heading">Support</h5>
+                <ul class="footer-links">
+                    <li><a href="#">Help Center</a></li>
+                    <li><a href="#">Safety Center</a></li>
+                    <li><a href="#">Community</a></li>
+                    <li><a href="#">Feedback</a></li>
+                </ul>
+            </div>
+            <div class="col-md-2 mt-4 mt-md-0">
+                <h5 class="footer-heading">Legal</h5>
+                <ul class="footer-links">
+                    <li><a href="#">Privacy</a></li>
+                    <li><a href="#">Terms</a></li>
+                    <li><a href="#">Cookies</a></li>
+                    <li><a href="#">Licenses</a></li>
+                </ul>
+            </div>
+        </div>
+        <div class="footer-bottom text-center mt-4">
+            <p class="mb-0">&copy; 2025 HermesChat. All rights reserved.</p>
+        </div>
+    </div>
+</footer>
+
+<!-- Include Font Awesome -->
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+
+<!-- Include Animate.css for animations -->
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/animate.css/4.1.1/animate.min.css">
+
+<!-- Styling -->
+@section Css {
+    <link href="/css/homeStyle.css" rel="stylesheet" />
+}
+
+<!-- Optional JavaScript for additional animations and interactions -->
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // Add scroll animations for sections
+        const observer = new IntersectionObserver((entries) => {
+            entries.forEach(entry => {
+                if (entry.isIntersecting) {
+                    entry.target.classList.add('animate__animated', 'animate__fadeInUp');
+                }
+            });
+        }, { threshold: 0.1 });
+
+        document.querySelectorAll('.feature-card, .testimonial-card').forEach(el => {
+            observer.observe(el);
+        });
+    });
+</script>
