@@ -32,7 +32,7 @@
             <h5 class="mb-0">Friends</h5>
             <div class="sidebar-actions">
                 <button id="addFriendBtn" class="btn btn-sm btn-primary rounded-circle" title="Add Friend">
-                    <i class="fas fa-user-plus"></i>
+                    <i class="fas fa-users"></i>
                 </button>
             </div>
         </div>
@@ -55,6 +55,45 @@
         </div>
     </div>
 
+    <!-- Sliding Panel for All Friends (triggered by Add Friend button) -->
+    <div id="allFriendsPanel" class="sidebar right-sidebar sliding-panel">
+        <div class="sidebar-header p-3 border-bottom d-flex align-items-center justify-content-between">
+            <h5 class="mb-0">All Friends</h5>
+            <button id="closeAllFriendsPanel" class="btn btn-sm btn-secondary rounded-circle" title="Close">
+                <i class="fas fa-times"></i>
+            </button>
+        </div>
+        <div class="p-3">
+            <h6 class="text-muted mb-2 friend-section-title">All Friends (A-Z)</h6>
+            <ul id="allFriendsList" class="list-unstyled mt-3">
+                <!-- All friends will be populated here -->
+            </ul>
+        </div>
+    </div>
+
+    <!-- Sliding Panel for User Info -->
+    <div id="userInfoPanel" class="sidebar right-sidebar sliding-panel">
+        <div class="sidebar-header p-3 border-bottom d-flex align-items-center justify-content-between">
+            <h5 class="mb-0">User Info</h5>
+            <button id="closeUserInfoPanel" class="btn btn-sm btn-secondary rounded-circle" title="Close">
+                <i class="fas fa-times"></i>
+            </button>
+        </div>
+        <div class="p-3">
+            <div class="user-info-content text-center">
+                <div class="user-avatar mb-3">
+                    <img id="userInfoAvatar" src="" class="rounded-circle" alt="User" width="80" height="80">
+                    <span id="userInfoStatus" class="status-dot status-dot-large"></span>
+                </div>
+                <h5 id="userInfoName" class="mb-2"></h5>
+                <p id="userInfoLastOnline" class="text-muted mb-3"></p>
+                <div class="user-info-details">
+                    <p><strong>Username:</strong> <span id="userInfoUsername"></span></p>
+                    <!-- Add more user info fields as needed -->
+                </div>
+            </div>
+        </div>
+    </div>
     <!-- Chat Area -->
     <div class="chat-area">
         <div class="chat-header p-3 border-bottom d-flex align-items-center">
@@ -71,6 +110,9 @@
                 </button>
                 <button id="startVideoCall" class="btn btn-primary rounded-circle ms-2" title="Start Video Call">
                     <i class="fas fa-video"></i>
+                </button>
+                <button id="viewUserInfo" class="btn btn-secondary rounded-circle ms-2" style="width:40px;" title="View Info">
+                    <i class="fas fa-ellipsis-v"></i>
                 </button>
             </div>
         </div>

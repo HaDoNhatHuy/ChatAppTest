@@ -2128,3 +2128,34 @@ body.dark-mode .voice-message-container.playing .voice-message-icon {
     align-items: center;
     justify-content: center;
 }
+.sliding-panel {
+    position: fixed;
+    top: 0;
+    right: -350px; /* Hidden by default */
+    width: 350px;
+    height: 100%;
+    background: rgba(255, 255, 255, 0.1);
+    backdrop-filter: blur(10px);
+    border-left: 1px solid rgba(255, 255, 255, 0.2);
+    transition: right 0.3s ease-in-out;
+    z-index: 1000;
+}
+
+    .sliding-panel.active {
+        right: 0;
+    }
+
+.status-dot-large {
+    width: 24px;
+    height: 24px;
+    bottom: 5px;
+    right: 5px;
+}
+
+.user-info-content {
+    padding: 20px;
+}
+
+.user-info-details p {
+    margin-bottom: 10px;
+}

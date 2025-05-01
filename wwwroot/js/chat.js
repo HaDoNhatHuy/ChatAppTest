@@ -98,6 +98,61 @@ document.addEventListener("DOMContentLoaded", async () => {
         if (scrollToBottomBtn) scrollToBottomBtn.classList.remove("active");
     });
 
+    // Toggle All Friends Panel
+    document.getElementById("addFriendBtn").addEventListener("click", () => {
+        const allFriendsPanel = document.getElementById("allFriendsPanel");
+        allFriendsPanel.classList.toggle("active");
+    });
+
+    // Close All Friends Panel
+    document.getElementById("closeAllFriendsPanel").addEventListener("click", () => {
+        const allFriendsPanel = document.getElementById("allFriendsPanel");
+        allFriendsPanel.classList.remove("active");
+    });
+
+    // Toggle User Info Panel
+    document.getElementById("viewUserInfo").addEventListener("click", () => {
+        if (currentFriend) {
+            const userInfoPanel = document.getElementById("userInfoPanel");
+            const userInfoAvatar = document.getElementById("userInfoAvatar");
+            const userInfoStatus = document.getElementById("userInfoStatus");
+            const userInfoName = document.getElementById("userInfoName");
+            const userInfoUsername = document.getElementById("userInfoUsername");
+            const userInfoLastOnline = document.getElementById("userInfoLastOnline");
+
+            // Populate user info
+            userInfoAvatar.src = `/images/avatars/${currentFriend}.jpg`;
+            userInfoAvatar.onerror = () => {
+                userInfoAvatar.src = '/images/avatars/default.jpg';
+            };
+            userInfoName.textContent = currentFriend;
+            userInfoUsername.textContent = currentFriend;
+
+            // Update status
+            const friendItems = document.getElementById("friendList").getElementsByTagName("li");
+            let isOnline = false;
+            for (let item of friendItems) {
+                if (item.dataset.username === currentFriend) {
+                    isOnline = item.querySelector(".status-dot").classList.contains("online");
+                    const lastOffline = item.querySelector(".last-offline").textContent;
+                    userInfoLastOnline.textContent = lastOffline || (isOnline ? "Online" : "Offline");
+                    break;
+                }
+            }
+            userInfoStatus.className = `status-dot status-dot-large ${isOnline ? "online" : "offline"}`;
+
+            userInfoPanel.classList.toggle("active");
+        } else {
+            alert("Please select a friend to view their info.");
+        }
+    });
+
+    // Close User Info Panel
+    document.getElementById("closeUserInfoPanel").addEventListener("click", () => {
+        const userInfoPanel = document.getElementById("userInfoPanel");
+        userInfoPanel.classList.remove("active");
+    });
+
     // Tích hợp Emoji Picker
     const emojiButton = document.getElementById("emojiButton");
     const emojiPicker = document.getElementById("emojiPicker");
@@ -1005,6 +1060,7 @@ connection.on("ReceiveUnreadCounts", (unreadCounts) => {
 });
 
 connection.on("ReceiveUserStatus", (username, isOnline) => {
+    // Cập nhật trạng thái trong danh sách Online Friends
     const friendItems = document.getElementById("friendList").getElementsByTagName("li");
     for (let item of friendItems) {
         if (item.dataset.username === username) {
@@ -1026,25 +1082,236 @@ connection.on("ReceiveUserStatus", (username, isOnline) => {
             break;
         }
     }
+
+    // Cập nhật trạng thái trong danh sách All Friends
+    const allFriendItems = document.getElementById("allFriendsList").getElementsByTagName("li");
+    for (let item of allFriendItems) {
+        if (item.dataset.username === username) {
+            const dot = item.querySelector(".status-dot");
+            const offlineSpan = item.querySelector(".last-offline");
+            dot.className = `status-dot ${isOnline ? "online" : "offline"}`;
+            if (isOnline) {
+                offlineSpan.textContent = "";
+            } else {
+                connection.invoke("GetLastOnline", currentUser, username).catch(err => console.error("Lỗi lấy thời gian online cuối:", err));
+            }
+            break;
+        }
+    }
+
+    // Cập nhật lại danh sách Online Friends
+    const friendList = document.getElementById("friendList");
+    const allFriendsList = document.getElementById("allFriendsList");
+    const sortedFriends = [...friendsList].sort((a, b) => a.localeCompare(b));
+    friendList.innerHTML = ""; // Xóa danh sách hiện tại
+
+    // Lấy trạng thái từ danh sách tất cả bạn bè
+    const friendStatuses = {};
+    const friendItemsAll = document.getElementById("allFriendsList").getElementsByTagName("li");
+    for (let item of friendItemsAll) {
+        const username = item.dataset.username;
+        const dot = item.querySelector(".status-dot");
+        friendStatuses[username] = dot.classList.contains("online");
+    }
+
+    // Hiển thị bạn bè online trong danh sách chính
+    const onlineFriends = sortedFriends.filter(friend => friendStatuses[friend]);
+    onlineFriends.forEach(friend => {
+        const li = document.createElement("li");
+        li.className = "p-2 cursor-pointer friend-item position-relative";
+        li.dataset.username = friend;
+        li.innerHTML = `
+            <div class="d-flex align-items-center">
+                <div class="user-avatar me-2">
+                    <img src="/images/avatars/${friend}.jpg" class="rounded-circle" alt="User" width="32" height="32" onerror="this.src='/images/avatars/default.jpg'">
+                </div>
+                <div class="friend-info flex-grow-1">
+                    ${friend}
+                    <div class="last-offline text-muted small"></div>
+                </div>
+                <span class="status-dot ${friendStatuses[friend] ? 'online' : 'offline'}"></span>
+            </div>
+        `;
+        li.onclick = () => {
+            currentFriend = friend;
+            localStorage.setItem("currentFriend", currentFriend);
+
+            document.getElementById("chat-intro").textContent = `Chat với ${friend}`;
+
+            const avatarContainer = document.getElementById("chatUserAvatarContainer");
+            const avatarImg = document.getElementById("chatUserAvatar");
+            const statusDot = document.getElementById("chatUserStatus");
+
+            avatarContainer.classList.remove("d-none");
+
+            avatarImg.src = `/images/avatars/${friend}.jpg`;
+            avatarImg.onerror = () => {
+                avatarImg.src = '/images/avatars/default.jpg';
+            };
+
+            const isOnline = friendStatuses[friend];
+            statusDot.className = `status-dot ${isOnline ? "online" : "offline"}`;
+
+            document.getElementById("messagesList").innerHTML = "";
+            oldestMessageId = null;
+            const loadingSpinner = document.getElementById("loadingSpinner");
+            if (loadingSpinner) loadingSpinner.classList.add("active");
+
+            const pendingMessages = JSON.parse(localStorage.getItem("pendingMessages") || "{}");
+            if (pendingMessages[friend]) {
+                pendingMessages[friend].forEach(msg => {
+                    connection.invoke("ReceiveMessage", msg.sender, msg.message, msg.receiver, msg.messageType, msg.fileUrl, msg.isPinned, msg.messageId, msg.timestamp, msg.fileSize);
+                });
+                delete pendingMessages[friend];
+                localStorage.setItem("pendingMessages", JSON.stringify(pendingMessages));
+            }
+
+            connection.invoke("LoadMessages", currentUser, friend).catch(err => {
+                console.error("Lỗi tải tin nhắn:", err);
+            }).finally(() => {
+                if (loadingSpinner) loadingSpinner.classList.remove("active");
+                const messagesList = document.getElementById("messagesList");
+                const scrollToBottom = (retryCount = 0) => {
+                    setTimeout(() => {
+                        const lastMessage = messagesList.lastElementChild;
+                        if (lastMessage) {
+                            lastMessage.scrollIntoView({ behavior: "smooth", block: "end" });
+                            console.log(`Scroll height sau khi tải tin nhắn: ${messagesList.scrollHeight}, ScrollTop: ${messagesList.scrollTop}, ClientHeight: ${messagesList.clientHeight}`);
+                        }
+                        setTimeout(() => {
+                            if (messagesList.scrollTop + messagesList.clientHeight < messagesList.scrollHeight - 50 && retryCount < 3) {
+                                console.log(`Cuộn xuống dưới thất bại sau khi tải tin nhắn, thử lại (${retryCount + 1})...`);
+                                scrollToBottom(retryCount + 1);
+                            }
+                        }, 100);
+                    }, 300);
+                };
+                scrollToBottom();
+
+                const messageElements = messagesList.querySelectorAll(".message");
+                messageElements.forEach(msg => observer.observe(msg));
+            });
+        };
+        friendList.appendChild(li);
+    });
 });
 
 connection.on("ReceiveFriends", (friends, friendStatuses) => {
     friendsList = friends;
     const friendList = document.getElementById("friendList");
+    const allFriendsList = document.getElementById("allFriendsList");
     friendList.innerHTML = "";
-    friends.sort((a, b) => a.localeCompare(b));
-    friends.forEach(friend => {
+    allFriendsList.innerHTML = "";
+
+    // Sắp xếp bạn bè theo A-Z cho panel tất cả bạn bè
+    const sortedFriends = [...friends].sort((a, b) => a.localeCompare(b));
+
+    // Điền danh sách tất cả bạn bè (A-Z)
+    sortedFriends.forEach(friend => {
         const li = document.createElement("li");
-        li.className = "p-2 cursor-pointer";
+        li.className = "p-2 cursor-pointer friend-item position-relative";
         li.dataset.username = friend;
         li.innerHTML = `
-            ${friend}
-            <span class="status-dot ${friendStatuses[friend] ? "online" : "offline"}"></span>
-            <span class="last-offline"></span>
+            <div class="d-flex align-items-center">
+                <div class="user-avatar me-2">
+                    <img src="/images/avatars/${friend}.jpg" class="rounded-circle" alt="User" width="32" height="32" onerror="this.src='/images/avatars/default.jpg'">
+                </div>
+                <div class="friend-info flex-grow-1">
+                    ${friend}
+                    <div class="last-offline text-muted small"></div>
+                </div>
+                <span class="status-dot ${friendStatuses[friend] ? 'online' : 'offline'}" style="margin-left:10px;"></span>
+            </div>
         `;
         if (!friendStatuses[friend]) {
             connection.invoke("GetLastOnline", currentUser, friend).catch(err => console.error("Lỗi lấy thời gian online cuối:", err));
         }
+        // Thêm sự kiện click để mở giao diện chat
+        li.onclick = () => {
+            currentFriend = friend;
+            localStorage.setItem("currentFriend", currentFriend);
+
+            document.getElementById("chat-intro").textContent = `Chat với ${friend}`;
+
+            const avatarContainer = document.getElementById("chatUserAvatarContainer");
+            const avatarImg = document.getElementById("chatUserAvatar");
+            const statusDot = document.getElementById("chatUserStatus");
+
+            avatarContainer.classList.remove("d-none");
+
+            avatarImg.src = `/images/avatars/${friend}.jpg`;
+            avatarImg.onerror = () => {
+                avatarImg.src = '/images/avatars/default.jpg';
+            };
+
+            const isOnline = friendStatuses[friend];
+            statusDot.className = `status-dot ${isOnline ? "online" : "offline"}`;
+
+            document.getElementById("messagesList").innerHTML = "";
+            oldestMessageId = null;
+            const loadingSpinner = document.getElementById("loadingSpinner");
+            if (loadingSpinner) loadingSpinner.classList.add("active");
+
+            const pendingMessages = JSON.parse(localStorage.getItem("pendingMessages") || "{}");
+            if (pendingMessages[friend]) {
+                pendingMessages[friend].forEach(msg => {
+                    connection.invoke("ReceiveMessage", msg.sender, msg.message, msg.receiver, msg.messageType, msg.fileUrl, msg.isPinned, msg.messageId, msg.timestamp, msg.fileSize);
+                });
+                delete pendingMessages[friend];
+                localStorage.setItem("pendingMessages", JSON.stringify(pendingMessages));
+            }
+
+            connection.invoke("LoadMessages", currentUser, friend).catch(err => {
+                console.error("Lỗi tải tin nhắn:", err);
+            }).finally(() => {
+                if (loadingSpinner) loadingSpinner.classList.remove("active");
+                const messagesList = document.getElementById("messagesList");
+                const scrollToBottom = (retryCount = 0) => {
+                    setTimeout(() => {
+                        const lastMessage = messagesList.lastElementChild;
+                        if (lastMessage) {
+                            lastMessage.scrollIntoView({ behavior: "smooth", block: "end" });
+                            console.log(`Scroll height sau khi tải tin nhắn: ${messagesList.scrollHeight}, ScrollTop: ${messagesList.scrollTop}, ClientHeight: ${messagesList.clientHeight}`);
+                        }
+                        setTimeout(() => {
+                            if (messagesList.scrollTop + messagesList.clientHeight < messagesList.scrollHeight - 50 && retryCount < 3) {
+                                console.log(`Cuộn xuống dưới thất bại sau khi tải tin nhắn, thử lại (${retryCount + 1})...`);
+                                scrollToBottom(retryCount + 1);
+                            }
+                        }, 100);
+                    }, 300);
+                };
+                scrollToBottom();
+
+                const messageElements = messagesList.querySelectorAll(".message");
+                messageElements.forEach(msg => observer.observe(msg));
+            });
+
+            // Đóng panel All Friends sau khi chọn
+            const allFriendsPanel = document.getElementById("allFriendsPanel");
+            allFriendsPanel.classList.remove("active");
+        };
+        allFriendsList.appendChild(li);
+    });
+
+    // Chỉ hiển thị bạn bè online trong danh sách chính
+    const onlineFriends = sortedFriends.filter(friend => friendStatuses[friend]);
+    onlineFriends.forEach(friend => {
+        const li = document.createElement("li");
+        li.className = "p-2 cursor-pointer friend-item position-relative";
+        li.dataset.username = friend;
+        li.innerHTML = `
+            <div class="d-flex align-items-center">
+                <div class="user-avatar me-2">
+                    <img src="/images/avatars/${friend}.jpg" class="rounded-circle" alt="User" width="32" height="32" onerror="this.src='/images/avatars/default.jpg'">
+                </div>
+                <div class="friend-info flex-grow-1">
+                    ${friend}
+                    <div class="last-offline text-muted small"></div>
+                </div>
+                <span class="status-dot ${friendStatuses[friend] ? 'online' : 'offline'}"></span>
+            </div>
+        `;
         li.onclick = () => {
             currentFriend = friend;
             localStorage.setItem("currentFriend", currentFriend);
@@ -1165,13 +1432,29 @@ connection.on("ReceiveSuccess", (message) => {
 
 connection.on("ReceiveLastOnline", (friend, lastOnline) => {
     console.log(`Nhận LastOnline cho ${friend}: ${lastOnline}`);
+
+    // Cập nhật cho danh sách bạn bè online (friendList)
     const friendItems = document.getElementById("friendList").getElementsByTagName("li");
     for (let item of friendItems) {
         if (item.dataset.username === friend) {
             const offlineSpan = item.querySelector(".last-offline");
             if (lastOnline) {
                 const lastOnlineDate = new Date(lastOnline);
-                console.log(`Parsed LastOnline cho ${friend}: ${lastOnlineDate}`);
+                console.log(`Parsed LastOnline cho ${friend} trong friendList: ${lastOnlineDate}`);
+                updateLastOfflineTime(offlineSpan, lastOnlineDate);
+            }
+            break;
+        }
+    }
+
+    // Cập nhật cho danh sách tất cả bạn bè (allFriendsList)
+    const allFriendItems = document.getElementById("allFriendsList").getElementsByTagName("li");
+    for (let item of allFriendItems) {
+        if (item.dataset.username === friend) {
+            const offlineSpan = item.querySelector(".last-offline");
+            if (lastOnline) {
+                const lastOnlineDate = new Date(lastOnline);
+                console.log(`Parsed LastOnline cho ${friend} trong allFriendsList: ${lastOnlineDate}`);
                 updateLastOfflineTime(offlineSpan, lastOnlineDate);
             }
             break;
@@ -1184,18 +1467,18 @@ function updateLastOfflineTime(element, lastOnline) {
     console.log(`Thời gian hiện tại: ${now}, LastOnline: ${lastOnline}`);
     const diff = Math.round((now - lastOnline) / 60000);
     if (diff < 1) {
-        element.textContent = "Offline just now";
+        element.textContent = "Vừa offline";
     } else if (diff < 60) {
-        element.textContent = `Offline ${diff} minutes ago`;
+        element.textContent = `Offline ${diff} phút trước`;
     } else if (diff < 1440) {
         const hours = Math.round(diff / 60);
-        element.textContent = `Offline ${hours} hours ago`;
+        element.textContent = `Offline ${hours} giờ trước`;
     } else if (diff < 10080) {
         const days = Math.round(diff / 1440);
-        element.textContent = `Offline ${days} days ago`;
+        element.textContent = `Offline ${days} ngày trước`;
     } else {
         const weeks = Math.round(diff / 10080);
-        element.textContent = `Offline ${weeks} weeks ago`;
+        element.textContent = `Offline ${weeks} tuần trước`;
     }
 }
 
