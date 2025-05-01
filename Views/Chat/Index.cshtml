@@ -21,7 +21,7 @@
     </script>
     <script>
         const currentUser = "@ViewBag.Username";
-    </script>    
+    </script>
     <script src="~/js/chat.js"></script>
 }
 
@@ -65,7 +65,10 @@
                 </div>
                 <h5 class="mb-0" id="chat-intro">Select a friend to start chatting</h5>
             </div>
-            <div class="chat-actions">
+            <div class="chat-actions" style="display:flex;">
+                <button id="startCall" class="btn btn-success rounded-circle ms-2" title="Start Call">
+                    <i class="fas fa-phone"></i>
+                </button>
                 <button id="startVideoCall" class="btn btn-primary rounded-circle ms-2" title="Start Video Call">
                     <i class="fas fa-video"></i>
                 </button>
@@ -125,6 +128,28 @@
                     <i class="fas fa-video"></i>
                 </button>
                 <button id="endCallButton" class="btn btn-danger rounded-pill">End Call</button>
+            </div>
+        </div>
+        <!-- Voice Call Container (Không có video) -->
+        <div id="voiceCallContainer" class="voice-call-container d-none">
+            <div class="voice-call-wrapper">
+                <div class="avatar-container">
+                    <div class="avatar-item">
+                        <img id="localAvatar" src="" class="voice-call-avatar" alt="Local User">
+                        <span id="localUserLabel" class="voice-call-label"></span>
+                    </div>
+                    <div class="avatar-item">
+                        <img id="remoteAvatar" src="" class="voice-call-avatar" alt="Remote User">
+                        <span id="remoteUserLabel" class="voice-call-label"></span>
+                    </div>
+                </div>
+                <div id="callTimer" class="call-timer">Đang kết nối...</div>
+            </div>
+            <div class="voice-call-controls">
+                <button id="toggleMuteButtonVoice" class="btn btn-light rounded-circle voice-control-btn me-2" title="Tắt/Bật âm thanh">
+                    <i class="fas fa-microphone"></i>
+                </button>
+                <button id="endCallButtonVoice" class="btn btn-danger rounded-pill">Kết thúc cuộc gọi</button>
             </div>
         </div>
 

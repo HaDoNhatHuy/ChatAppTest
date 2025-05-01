@@ -132,7 +132,7 @@ namespace HermesChatApp.Controllers
             {
                 username = user.Username,
                 email = user.Email,
-                avatarUrl = user.AvatarUrl ?? "/images/avatars/default.jpg"
+                avatarUrl = "/images/avatars/" + user.AvatarUrl ?? "/images/avatars/default.jpg"
             });
         }
 

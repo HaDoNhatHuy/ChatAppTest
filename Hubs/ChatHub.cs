@@ -46,7 +46,7 @@ namespace HermesChatApp.Hubs
                     var user = await _context.Users.FirstOrDefaultAsync(u => u.Username == username);
                     if (user != null)
                     {
-                        user.LastOnline = DateTime.Now; // Sử dụng DateTime.Now thay vì DateTime.UtcNow
+                        user.LastOnline = DateTime.Now;
                         _context.Users.Update(user);
                         await _context.SaveChangesAsync();
                     }
@@ -151,7 +151,7 @@ namespace HermesChatApp.Hubs
                     Content = "",
                     MessageType = messageType,
                     FileUrl = fileUrl,
-                    FileSize = fileSize, // Lưu fileSize vào model
+                    FileSize = fileSize,
                     SenderId = senderUser.Id,
                     ReceiverId = receiverUser.Id,
                     Timestamp = DateTime.Now,
@@ -179,51 +179,7 @@ namespace HermesChatApp.Hubs
                 await Clients.Caller.SendAsync("ReceiveError", "Failed to send file.");
             }
         }
-        //public async Task LoadMessages(string currentUser, string friend)
-        //{
-        //    try
-        //    {
-        //        var currentUserEntity = await _context.Users.FirstOrDefaultAsync(u => u.Username == currentUser);
-        //        var friendEntity = await _context.Users.FirstOrDefaultAsync(u => u.Username == friend);
-        //        if (currentUserEntity == null || friendEntity == null)
-        //        {
-        //            await Clients.Caller.SendAsync("ReceiveError", "User or friend not found.");
-        //            return;
-        //        }
 
-        //        var messages = await _context.Messages
-        //            .Where(m =>
-        //                (m.SenderId == currentUserEntity.Id && m.ReceiverId == friendEntity.Id) ||
-        //                (m.SenderId == friendEntity.Id && m.ReceiverId == currentUserEntity.Id))
-        //            .OrderByDescending(m => m.Timestamp) // Sắp xếp giảm dần để lấy tin nhắn mới nhất trước
-        //            .Take(50) // Lấy 50 tin nhắn gần nhất
-        //            .OrderBy(m => m.Timestamp) // Sắp xếp lại tăng dần để hiển thị đúng thứ tự
-        //            .Select(m => new
-        //            {
-        //                m.Id,
-        //                m.Content,
-        //                m.MessageType,
-        //                m.FileUrl,
-        //                m.IsPinned,
-        //                m.Timestamp,
-        //                SenderUsername = m.Sender.Username,
-        //                ReceiverUsername = m.Receiver.Username
-        //            })
-        //            .ToListAsync();
-
-        //        foreach (var msg in messages)
-        //        {
-        //            await Clients.Caller.SendAsync("ReceiveMessage", msg.SenderUsername, msg.Content, msg.ReceiverUsername, msg.MessageType, msg.FileUrl, msg.IsPinned, msg.Id, msg.Timestamp.ToString("o"));
-        //        }
-
-        //        await MarkMessagesAsRead(currentUser, friend);
-        //    }
-        //    catch (Exception ex)
-        //    {
-        //        Console.WriteLine($"Error in LoadMessages: {ex.Message}");
-        //        await Clients.Caller.SendAsync("ReceiveError", "Failed to load messages.");
-        //    }
-        //}
         public async Task LoadMessages(string currentUser, string friend)
         {
             try
@@ -249,7 +205,7 @@ namespace HermesChatApp.Hubs
                         m.Content,
                         m.MessageType,
                         m.FileUrl,
-                        m.FileSize, // Bao gồm FileSize
+                        m.FileSize,
                         m.IsPinned,
                         m.Timestamp,
                         SenderUsername = m.Sender.Username,
@@ -270,6 +226,7 @@ namespace HermesChatApp.Hubs
                 await Clients.Caller.SendAsync("ReceiveError", "Failed to load messages.");
             }
         }
+
         public async Task PinMessage(string user, int messageId)
         {
             try
@@ -666,7 +623,7 @@ namespace HermesChatApp.Hubs
             }
         }
 
-        public async Task SendSignal(string targetUser, string signalData)
+        public async Task SendSignal(string targetUser, string signalData, bool videoEnabled)
         {
             try
             {
@@ -679,11 +636,12 @@ namespace HermesChatApp.Hubs
 
                 if (_userConnections.TryGetValue(targetUser, out var targetConnectionId))
                 {
-                    await Clients.Client(targetConnectionId).SendAsync("ReceiveSignal", sender, signalData);
+                    await Clients.Client(targetConnectionId).SendAsync("ReceiveSignal", sender, signalData, videoEnabled);
                 }
                 else
                 {
-                    await Clients.Caller.SendAsync("ReceiveError", $"User {targetUser} not found or not online.");
+                    await Clients.Caller.SendAsync("ReceiveError", $"User {targetUser} is not online. Please try again later.");
+                    await Clients.Caller.SendAsync("CallEnded"); // Gửi tín hiệu kết thúc cuộc gọi nếu người nhận không online
                 }
             }
             catch (Exception ex)
@@ -693,6 +651,33 @@ namespace HermesChatApp.Hubs
             }
         }
 
+        public async Task CallAccepted(string caller)
+        {
+            try
+            {
+                var accepter = _userConnections.FirstOrDefault(x => x.Value == Context.ConnectionId).Key;
+                if (string.IsNullOrEmpty(accepter))
+                {
+                    await Clients.Caller.SendAsync("ReceiveError", "Accepter not found.");
+                    return;
+                }
+
+                if (_userConnections.TryGetValue(caller, out var callerConnectionId))
+                {
+                    await Clients.Client(callerConnectionId).SendAsync("CallAccepted", accepter);
+                }
+                else
+                {
+                    await Clients.Caller.SendAsync("ReceiveError", $"User {caller} is not online.");
+                    await Clients.Caller.SendAsync("CallEnded");
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error in CallAccepted: {ex.Message}");
+                await Clients.Caller.SendAsync("ReceiveError", "Failed to confirm call acceptance.");
+            }
+        }
         public async Task SendCallEnded(string targetUser)
         {
             try
@@ -706,7 +691,7 @@ namespace HermesChatApp.Hubs
 
                 if (_userConnections.TryGetValue(targetUser, out var targetConnectionId))
                 {
-                    await Clients.Client(targetConnectionId).SendAsync("CallEnded", sender);
+                    await Clients.Client(targetConnectionId).SendAsync("CallEnded");
                 }
                 else
                 {
@@ -722,73 +707,92 @@ namespace HermesChatApp.Hubs
 
         public async Task LoadOlderMessages(string currentUser, string friend, int oldestMessageId)
         {
-            var currentUserEntity = await _context.Users.FirstOrDefaultAsync(u => u.Username == currentUser);
-            var friendEntity = await _context.Users.FirstOrDefaultAsync(u => u.Username == friend);
-
-            if (currentUserEntity == null || friendEntity == null)
+            try
             {
-                await Clients.Caller.SendAsync("ReceiveError", "User not found.");
-                return;
-            }
+                var currentUserEntity = await _context.Users.FirstOrDefaultAsync(u => u.Username == currentUser);
+                var friendEntity = await _context.Users.FirstOrDefaultAsync(u => u.Username == friend);
 
-            var messages = await _context.Messages
-                .Where(m =>
-                    ((m.SenderId == currentUserEntity.Id && m.ReceiverId == friendEntity.Id) ||
-                     (m.SenderId == friendEntity.Id && m.ReceiverId == currentUserEntity.Id)) &&
-                    m.Id < oldestMessageId)
-                .OrderByDescending(m => m.Timestamp)
-                .Take(20)
-                .Select(m => new
+                if (currentUserEntity == null || friendEntity == null)
                 {
-                    m.Id,
-                    m.Content,
-                    m.MessageType,
-                    m.FileUrl,
-                    m.FileSize, // Bao gồm FileSize
-                    m.IsPinned,
-                    m.Timestamp,
-                    SenderUsername = m.Sender.Username,
-                    ReceiverUsername = m.Receiver.Username
-                })
-                .ToListAsync();
+                    await Clients.Caller.SendAsync("ReceiveError", "User not found.");
+                    return;
+                }
 
-            Console.WriteLine($"Loaded {messages.Count} older messages for {currentUser} and {friend}");
+                var messages = await _context.Messages
+                    .Where(m =>
+                        ((m.SenderId == currentUserEntity.Id && m.ReceiverId == friendEntity.Id) ||
+                         (m.SenderId == friendEntity.Id && m.ReceiverId == currentUserEntity.Id)) &&
+                        m.Id < oldestMessageId)
+                    .OrderByDescending(m => m.Timestamp)
+                    .Take(20)
+                    .Select(m => new
+                    {
+                        m.Id,
+                        m.Content,
+                        m.MessageType,
+                        m.FileUrl,
+                        m.FileSize,
+                        m.IsPinned,
+                        m.Timestamp,
+                        SenderUsername = m.Sender.Username,
+                        ReceiverUsername = m.Receiver.Username
+                    })
+                    .ToListAsync();
 
-            await Clients.Caller.SendAsync("ReceiveOlderMessages", messages.OrderBy(m => m.Timestamp).ToList());
+                Console.WriteLine($"Loaded {messages.Count} older messages for {currentUser} and {friend}");
+
+                await Clients.Caller.SendAsync("ReceiveOlderMessages", messages.OrderBy(m => m.Timestamp).ToList());
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error in LoadOlderMessages: {ex.Message}");
+                await Clients.Caller.SendAsync("ReceiveError", "Failed to load older messages.");
+            }
         }
+
         public async Task MarkMessageAsSeen(int messageId, string receiverUserName)
         {
-            var message = await _context.Messages
-                .Include(m => m.Sender)
-                .Include(m => m.Receiver)
-                .FirstOrDefaultAsync(m => m.Id == messageId);
-
-            if (message == null)
+            try
             {
-                Console.WriteLine($"Message with ID {messageId} not found.");
-                return;
+                var message = await _context.Messages
+                    .Include(m => m.Sender)
+                    .Include(m => m.Receiver)
+                    .FirstOrDefaultAsync(m => m.Id == messageId);
+
+                if (message == null)
+                {
+                    Console.WriteLine($"Message with ID {messageId} not found.");
+                    return;
+                }
+
+                var receiver = await _context.Users.FirstOrDefaultAsync(u => u.Username == receiverUserName);
+                if (receiver == null)
+                {
+                    Console.WriteLine($"Receiver {receiverUserName} not found.");
+                    return;
+                }
+
+                if (message.ReceiverId == receiver.Id && !message.IsSeen)
+                {
+                    Console.WriteLine($"Marking message {messageId} as seen. Sender: {message.Sender.Username}, Receiver: {receiverUserName}");
+                    message.IsSeen = true;
+                    await _context.SaveChangesAsync();
+
+                    var senderConnectionId = _userConnections.GetValueOrDefault(message.Sender.Username);
+                    if (senderConnectionId != null)
+                    {
+                        await Clients.Client(senderConnectionId).SendAsync("MessageSeen", messageId);
+                        Console.WriteLine($"Sent MessageSeen signal for message {messageId} to {message.Sender.Username}");
+                    }
+                }
+                else
+                {
+                    Console.WriteLine($"Message {messageId} not marked as seen. ReceiverId: {message.ReceiverId}, Receiver.Id: {receiver.Id}, IsSeen: {message.IsSeen}");
+                }
             }
-
-            var receiver = await _context.Users.FirstOrDefaultAsync(u => u.Username == receiverUserName);
-            if (receiver == null)
+            catch (Exception ex)
             {
-                Console.WriteLine($"Receiver {receiverUserName} not found.");
-                return;
-            }
-
-            if (message.ReceiverId == receiver.Id && !message.IsSeen)
-            {
-                Console.WriteLine($"Marking message {messageId} as seen. Sender: {message.Sender.Username}, Receiver: {receiverUserName}");
-                message.IsSeen = true;
-                await _context.SaveChangesAsync();
-
-                // Gửi tín hiệu "đã xem" đến người gửi
-                await Clients.User(message.Sender.Username).SendAsync("MessageSeen", messageId);
-                Console.WriteLine($"Sent MessageSeen signal for message {messageId} to {message.Sender.Username}");
-            }
-            else
-            {
-                Console.WriteLine($"Message {messageId} not marked as seen. ReceiverId: {message.ReceiverId}, Receiver.Id: {receiver.Id}, IsSeen: {message.IsSeen}");
+                Console.WriteLine($"Error in MarkMessageAsSeen: {ex.Message}");
             }
         }
     }

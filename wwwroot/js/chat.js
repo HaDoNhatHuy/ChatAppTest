@@ -14,18 +14,27 @@ let isLoadingMessages = false;
 let friendsList = [];
 let mediaRecorder = null;
 let audioChunks = [];
+let isVideoCall = false;
+let callStartTime = null;
+let callTimerInterval = null;
 
-// Hàm formatRecordingTime được định nghĩa ở phạm vi toàn cục
+// Hàm format thời gian ghi âm
 function formatRecordingTime(seconds) {
-    if (!isFinite(seconds) || seconds < 0) {
-        return "Error";
-    }
+    if (!isFinite(seconds) || seconds < 0) return "Error";
     const mins = Math.floor(seconds / 60).toString().padStart(2, '0');
     const secs = (seconds % 60).toString().padStart(2, '0');
     return `${mins}:${secs}`;
 }
 
-// Thêm IntersectionObserver để phát hiện tin nhắn hiển thị trong viewport
+// Hàm format thời gian cuộc gọi
+function formatCallDuration(seconds) {
+    const hours = Math.floor(seconds / 3600).toString().padStart(2, '0');
+    const mins = Math.floor((seconds % 3600) / 60).toString().padStart(2, '0');
+    const secs = (seconds % 60).toString().padStart(2, '0');
+    return hours > 0 ? `${hours}:${mins}:${secs}` : `${mins}:${secs}`;
+}
+
+// IntersectionObserver để phát hiện tin nhắn hiển thị
 const observer = new IntersectionObserver((entries) => {
     entries.forEach(entry => {
         if (entry.isIntersecting) {
@@ -35,7 +44,7 @@ const observer = new IntersectionObserver((entries) => {
 
             if (isReceiver && messageElement.dataset.seen === "false") {
                 connection.invoke("MarkMessageAsSeen", messageId, currentUser).catch(err => {
-                    console.error("Error marking message as seen:", err);
+                    console.error("Lỗi đánh dấu tin nhắn đã xem:", err);
                 });
             }
         }
@@ -43,10 +52,10 @@ const observer = new IntersectionObserver((entries) => {
 }, { threshold: 0.5 });
 
 document.addEventListener("DOMContentLoaded", async () => {
-    console.log("DOM loaded, initializing chat...");
+    console.log("DOM loaded, khởi tạo chat...");
 
     localStorage.removeItem("currentFriend");
-    console.log("Cleared currentFriend from localStorage on page load");
+    console.log("Đã xóa currentFriend từ localStorage khi tải trang");
 
     await startConnection();
 
@@ -55,47 +64,38 @@ document.addEventListener("DOMContentLoaded", async () => {
         if (messagesList.scrollTop === 0 && !isLoadingMessages && oldestMessageId) {
             isLoadingMessages = true;
             const loadingSpinner = document.getElementById("loadingSpinner");
-            if (loadingSpinner) {
-                loadingSpinner.classList.add("active");
-            }
+            if (loadingSpinner) loadingSpinner.classList.add("active");
 
             try {
                 await connection.invoke("LoadOlderMessages", currentUser, currentFriend, oldestMessageId);
             } catch (err) {
-                console.error("Error loading older messages:", err);
+                console.error("Lỗi tải tin nhắn cũ:", err);
             } finally {
                 isLoadingMessages = false;
-                if (loadingSpinner) {
-                    loadingSpinner.classList.remove("active");
-                }
+                if (loadingSpinner) loadingSpinner.classList.remove("active");
             }
         }
 
         const scrollToBottomBtn = document.getElementById("scrollToBottomBtn");
         if (scrollToBottomBtn) {
             if (messagesList.scrollTop + messagesList.clientHeight < messagesList.scrollHeight - 50) {
-                console.log("Showing scroll to bottom button on scroll");
+                console.log("Hiển thị nút cuộn xuống dưới");
                 scrollToBottomBtn.classList.add("active");
             } else {
-                console.log("Hiding scroll to bottom button on scroll");
+                console.log("Ẩn nút cuộn xuống dưới");
                 scrollToBottomBtn.classList.remove("active");
             }
-        } else {
-            console.error("Scroll to bottom button element not found!");
         }
     });
 
     document.getElementById("scrollToBottomBtn").addEventListener("click", () => {
-        const messagesList = document.getElementById("messagesList");
         const lastMessage = messagesList.lastElementChild;
         if (lastMessage) {
             lastMessage.scrollIntoView({ behavior: "smooth", block: "end" });
-            console.log("Scrolled to bottom via button");
+            console.log("Đã cuộn xuống dưới qua nút");
         }
         const scrollToBottomBtn = document.getElementById("scrollToBottomBtn");
-        if (scrollToBottomBtn) {
-            scrollToBottomBtn.classList.remove("active");
-        }
+        if (scrollToBottomBtn) scrollToBottomBtn.classList.remove("active");
     });
 
     // Tích hợp Emoji Picker
@@ -110,15 +110,11 @@ document.addEventListener("DOMContentLoaded", async () => {
 
     emojiPicker.addEventListener("emoji-click", (event) => {
         messageInput.value += event.detail.unicode;
-        emojiPicker.style.display = "none"; // Ẩn picker sau khi chọn
+        emojiPicker.style.display = "none";
     });
 
-    // Đóng picker khi click ra ngoài
     document.addEventListener("click", (event) => {
-        if (
-            !emojiPicker.contains(event.target) &&
-            !emojiButton.contains(event.target)
-        ) {
+        if (!emojiPicker.contains(event.target) && !emojiButton.contains(event.target)) {
             emojiPicker.style.display = "none";
         }
     });
@@ -148,18 +144,17 @@ document.addEventListener("DOMContentLoaded", async () => {
                     voiceButton.parentElement.classList.remove('recording-active');
 
                     if (audioChunks.length > 0) {
-                        // Chuyển đổi audio/webm sang audio/mp3 bằng lamejs
                         const audioBlob = new Blob(audioChunks, { type: "audio/webm" });
                         const arrayBuffer = await audioBlob.arrayBuffer();
                         const audioContext = new AudioContext();
                         const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
 
-                        const wav = audioBuffer.getChannelData(0); // Lấy dữ liệu âm thanh (mono channel)
-                        const mp3Encoder = new lamejs.Mp3Encoder(1, audioBuffer.sampleRate, 128); // Mono, 128kbps
+                        const wav = audioBuffer.getChannelData(0);
+                        const mp3Encoder = new lamejs.Mp3Encoder(1, audioBuffer.sampleRate, 128);
                         const mp3Data = [];
                         const samples = new Int16Array(wav.length);
                         for (let i = 0; i < wav.length; i++) {
-                            samples[i] = wav[i] * 32767; // Chuyển đổi sang 16-bit PCM
+                            samples[i] = wav[i] * 32767;
                         }
                         const mp3Buffer = mp3Encoder.encodeBuffer(samples);
                         const endBuffer = mp3Encoder.flush();
@@ -167,7 +162,7 @@ document.addEventListener("DOMContentLoaded", async () => {
                         mp3Data.push(endBuffer);
 
                         const mp3Blob = new Blob(mp3Data, { type: 'audio/mp3' });
-                        const fileSize = mp3Blob.size; // Lấy kích thước file tại client
+                        const fileSize = mp3Blob.size;
                         const formData = new FormData();
                         formData.append("file", mp3Blob, "voice-message.mp3");
 
@@ -209,7 +204,6 @@ document.addEventListener("DOMContentLoaded", async () => {
                         isRecording = false;
                         voiceButton.innerHTML = '<i class="fas fa-microphone"></i>';
                         voiceButton.title = "Record Voice Message";
-                        voiceButton.parentElement.classList.remove('recording-active');
                     }
                 }, 120000);
 
@@ -217,8 +211,8 @@ document.addEventListener("DOMContentLoaded", async () => {
                 voiceButton.innerHTML = '<i class="fas fa-stop"></i>';
                 voiceButton.title = "Stop Recording";
             } catch (err) {
-                console.error("Error accessing microphone:", err);
-                toastr.error("Unable to access microphone. Please check your permissions.");
+                console.error("Lỗi truy cập microphone:", err);
+                toastr.error("Không thể truy cập microphone. Vui lòng kiểm tra quyền truy cập.");
             }
         } else {
             clearInterval(recordingTimer);
@@ -235,23 +229,76 @@ document.addEventListener("DOMContentLoaded", async () => {
             voiceButton.title = "Record Voice Message";
         }
     });
+
+    // Sự kiện cho các nút điều khiển cuộc gọi
+    const toggleMuteButton = document.getElementById("toggleMuteButton");
+    const toggleMuteButtonVoice = document.getElementById("toggleMuteButtonVoice");
+    const toggleVideoButton = document.getElementById("toggleVideoButton");
+    const endCallButton = document.getElementById("endCallButton");
+    const endCallButtonVoice = document.getElementById("endCallButtonVoice");
+
+    // Xử lý bật/tắt âm thanh cho video call
+    toggleMuteButton.addEventListener("click", () => {
+        if (localStream) {
+            const audioTrack = localStream.getAudioTracks()[0];
+            if (audioTrack) {
+                audioTrack.enabled = !audioTrack.enabled;
+                toggleMuteButton.innerHTML = audioTrack.enabled ? '<i class="fas fa-microphone"></i>' : '<i class="fas fa-microphone-slash"></i>';
+                toggleMuteButton.title = audioTrack.enabled ? "Mute" : "Unmute";
+            }
+        }
+    });
+
+    // Xử lý bật/tắt âm thanh cho voice call
+    toggleMuteButtonVoice.addEventListener("click", () => {
+        if (localStream) {
+            const audioTrack = localStream.getAudioTracks()[0];
+            if (audioTrack) {
+                audioTrack.enabled = !audioTrack.enabled;
+                toggleMuteButtonVoice.innerHTML = audioTrack.enabled ? '<i class="fas fa-microphone"></i>' : '<i class="fas fa-microphone-slash"></i>';
+                toggleMuteButtonVoice.title = audioTrack.enabled ? "Mute" : "Unmute";
+            }
+        }
+    });
+
+    // Xử lý bật/tắt video
+    toggleVideoButton.addEventListener("click", () => {
+        if (localStream) {
+            const videoTrack = localStream.getVideoTracks()[0];
+            if (videoTrack) {
+                videoTrack.enabled = !videoTrack.enabled;
+                toggleVideoButton.innerHTML = videoTrack.enabled ? '<i class="fas fa-video"></i>' : '<i class="fas fa-video-slash"></i>';
+                toggleVideoButton.title = videoTrack.enabled ? "Turn Camera Off" : "Turn Camera On";
+            }
+        }
+    });
+
+    // Xử lý kết thúc cuộc gọi (video call)
+    endCallButton.addEventListener("click", () => {
+        endCall();
+    });
+
+    // Xử lý kết thúc cuộc gọi (voice call)
+    endCallButtonVoice.addEventListener("click", () => {
+        endCall();
+    });
 });
 
 async function startConnection() {
     try {
         if (connection.state === signalR.HubConnectionState.Connected) {
-            console.log("SignalR connection already established.");
+            console.log("Kết nối SignalR đã được thiết lập.");
             return;
         }
 
         if (connection.state !== signalR.HubConnectionState.Disconnected) {
-            console.log(`SignalR connection is in ${connection.state} state. Stopping current connection...`);
+            console.log(`Kết nối SignalR đang ở trạng thái ${connection.state}. Đang dừng kết nối hiện tại...`);
             await connection.stop();
         }
 
-        console.log("Attempting to start SignalR connection...");
+        console.log("Đang thử khởi tạo kết nối SignalR...");
         await connection.start();
-        console.log("SignalR Connected.");
+        console.log("Đã kết nối SignalR.");
 
         await Promise.all([
             connection.invoke("GetFriends", currentUser),
@@ -259,24 +306,46 @@ async function startConnection() {
             connection.invoke("GetUnreadCounts", currentUser)
         ]);
     } catch (err) {
-        console.error("Error starting SignalR connection:", err);
-        alert("Failed to connect to the server. Retrying in 5 seconds...");
+        console.error("Lỗi khởi tạo kết nối SignalR:", err);
+        alert("Không thể kết nối đến máy chủ. Thử lại sau 5 giây...");
         setTimeout(startConnection, 5000);
+        throw err;
     }
 }
 
 connection.onclose(async (error) => {
-    console.log("SignalR connection closed. Error:", error);
-    alert("Lost connection to the server. Attempting to reconnect...");
+    console.log("Kết nối SignalR đã đóng. Lỗi:", error);
+    alert("Mất kết nối với máy chủ. Đang thử kết nối lại...");
     await startConnection();
 });
 
+// Cập nhật thời gian cuộc gọi khi cuộc gọi được chấp nhận
+connection.on("CallAccepted", (caller) => {
+    if (caller === remoteUser || caller === incomingCaller) {
+        startCallTimer();
+    }
+});
+
+// Hàm bắt đầu đếm thời gian cuộc gọi
+function startCallTimer() {
+    if (callTimerInterval) {
+        clearInterval(callTimerInterval);
+    }
+    callStartTime = new Date();
+    const callTimer = document.getElementById("callTimer");
+    callTimerInterval = setInterval(() => {
+        const now = new Date();
+        const seconds = Math.floor((now - callStartTime) / 1000);
+        callTimer.textContent = formatCallDuration(seconds);
+    }, 1000);
+}
+
 connection.on("ReceiveMessage", (sender, message, receiver, messageType = "Text", fileUrl = null, isPinned = false, messageId, timestamp, fileSize = 0) => {
-    console.log(`Received message: Sender=${sender}, Receiver=${receiver}, Content=${message}, Type=${messageType}, ID=${messageId}, Timestamp=${timestamp}, FileSize=${fileSize}`);
+    console.log(`Nhận tin nhắn: Sender=${sender}, Receiver=${receiver}, Content=${message}, Type=${messageType}, ID=${messageId}, Timestamp=${timestamp}, FileSize=${fileSize}`);
     if ((sender === currentFriend && receiver === currentUser) || (sender === currentUser && receiver === currentFriend)) {
         const messagesList = document.getElementById("messagesList");
         if (!messagesList) {
-            console.error("Messages list element not found!");
+            console.error("Không tìm thấy danh sách tin nhắn!");
             return;
         }
 
@@ -315,7 +384,7 @@ connection.on("ReceiveMessage", (sender, message, receiver, messageType = "Text"
         if (messageType === "Image") {
             content = `
                 <div class="image-message-container">
-                    <img src="${fileUrl}" alt="Image" />
+                    <img src="${fileUrl}" alt="Hình ảnh" />
                 </div>
             `;
         } else if (messageType === "File") {
@@ -339,7 +408,7 @@ connection.on("ReceiveMessage", (sender, message, receiver, messageType = "Text"
                         <div class="file-name">${fileName}</div>
                         <div class="file-meta">
                             <span class="file-size">${formatFileSize(fileSize)}</span>
-                            <a href="${fileUrl}" class="file-link" target="_blank">Download</a>
+                            <a href="${fileUrl}" class="file-link" target="_blank">Tải xuống</a>
                         </div>
                     </div>
                 </div>
@@ -371,7 +440,7 @@ connection.on("ReceiveMessage", (sender, message, receiver, messageType = "Text"
                     </div>
                     <audio class="voice-audio" style="display: none;">
                         <source src="${fileUrl}" type="audio/mp3">
-                        Your browser does not support the audio element.
+                        Trình duyệt của bạn không hỗ trợ phát âm thanh.
                     </audio>
                 </div>
             `;
@@ -382,8 +451,8 @@ connection.on("ReceiveMessage", (sender, message, receiver, messageType = "Text"
             <div class="content">
                 <span>${content}</span>
                 <small>${messageDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</small>
-                ${sender === currentUser ? `<small class="seen-indicator text-success" style="display: none;" title="Seen"><i class="fas fa-check-double"></i></small>` : ""}
-                <button class="pin-button btn btn-sm btn-outline-secondary">${isPinned ? "Unpin" : "Pin"}</button>
+                ${sender === currentUser ? `<small class="seen-indicator text-success" style="display: none;" title="Đã xem"><i class="fas fa-check-double"></i></small>` : ""}
+                <button class="pin-button btn btn-sm btn-outline-secondary">${isPinned ? "Bỏ ghim" : "Ghim"}</button>
             </div>
         `;
         messagesList.appendChild(li);
@@ -397,33 +466,31 @@ connection.on("ReceiveMessage", (sender, message, receiver, messageType = "Text"
             const waveformBars = container.querySelector('.voice-waveform-bars');
             const progressBar = container.querySelector('.voice-progress-bar');
 
-            // Thêm kiểm tra lỗi khi tải file âm thanh
             audio.onerror = () => {
-                console.error(`Failed to load audio from ${fileUrl}`);
-                durationSpan.textContent = "Error";
+                console.error(`Không thể tải âm thanh từ ${fileUrl}`);
+                durationSpan.textContent = "Lỗi";
                 durationSpan.style.color = "red";
             };
 
-            // Tải file âm thanh và lấy thời lượng
             audio.onloadedmetadata = () => {
                 const duration = audio.duration;
-                console.log(`Audio duration for ${fileUrl}: ${duration} seconds`);
+                console.log(`Thời lượng âm thanh cho ${fileUrl}: ${duration} giây`);
                 if (!isFinite(duration) || duration <= 0) {
-                    durationSpan.textContent = "Error";
+                    durationSpan.textContent = "Lỗi";
                     durationSpan.style.color = "red";
                 } else {
                     durationSpan.textContent = formatRecordingTime(Math.round(duration));
                 }
             };
 
-            // Buộc tải lại file âm thanh để đảm bảo sự kiện onloadedmetadata được gọi
             audio.load();
 
-            playButton.addEventListener('click', () => {
+            playButton.addEventListener('click', (event) => {
+                event.stopPropagation();
                 if (audio.paused) {
                     audio.play().catch(err => {
-                        console.error(`Error playing audio from ${fileUrl}:`, err);
-                        toastr.error("Failed to play audio. Please check the file.");
+                        console.error(`Lỗi phát âm thanh từ ${fileUrl}:`, err);
+                        toastr.error("Không thể phát âm thanh. Vui lòng kiểm tra file.");
                     });
                     playButton.classList.remove('fa-play');
                     playButton.classList.add('fa-pause');
@@ -460,12 +527,13 @@ connection.on("ReceiveMessage", (sender, message, receiver, messageType = "Text"
 
         if (messageType === "Image") {
             const img = li.querySelector('.image-message-container img');
-            img.addEventListener('click', () => {
+            img.addEventListener('click', (event) => {
+                event.stopPropagation();
                 const lightbox = document.createElement('div');
                 lightbox.className = 'image-lightbox';
                 lightbox.innerHTML = `
                     <div class="lightbox-content">
-                        <img src="${fileUrl}" alt="Image" class="lightbox-image" />
+                        <img src="${fileUrl}" alt="Hình ảnh" class="lightbox-image" />
                         <span class="lightbox-close">×</span>
                     </div>
                 `;
@@ -496,11 +564,11 @@ connection.on("ReceiveMessage", (sender, message, receiver, messageType = "Text"
                 const lastMessage = messagesList.lastElementChild;
                 if (lastMessage) {
                     lastMessage.scrollIntoView({ behavior: "smooth", block: "end" });
-                    console.log(`Auto-scrolled to bottom. ScrollHeight: ${messagesList.scrollHeight}, ScrollTop: ${messagesList.scrollTop}, ClientHeight: ${messagesList.clientHeight}`);
+                    console.log(`Đã cuộn xuống dưới. ScrollHeight: ${messagesList.scrollHeight}, ScrollTop: ${messagesList.scrollTop}, ClientHeight: ${messagesList.clientHeight}`);
                 }
                 setTimeout(() => {
                     if (messagesList.scrollTop + messagesList.clientHeight < messagesList.scrollHeight - 50 && retryCount < 3) {
-                        console.log(`Scroll to bottom failed, retrying (${retryCount + 1})...`);
+                        console.log(`Cuộn xuống dưới thất bại, thử lại (${retryCount + 1})...`);
                         scrollToBottom(retryCount + 1);
                     }
                 }, 100);
@@ -508,37 +576,42 @@ connection.on("ReceiveMessage", (sender, message, receiver, messageType = "Text"
                 const scrollToBottomBtn = document.getElementById("scrollToBottomBtn");
                 if (scrollToBottomBtn) {
                     if (messagesList.scrollTop + messagesList.clientHeight < messagesList.scrollHeight - 50) {
-                        console.log("Showing scroll to bottom button");
+                        console.log("Hiển thị nút cuộn xuống dưới");
                         scrollToBottomBtn.classList.add("active");
                     } else {
-                        console.log("Hiding scroll to bottom button");
+                        console.log("Ẩn nút cuộn xuống dưới");
                         scrollToBottomBtn.classList.remove("active");
                     }
-                } else {
-                    console.error("Scroll to bottom button element not found!");
                 }
             }, 300);
         };
 
         scrollToBottom();
 
-        li.addEventListener("click", () => {
+        li.addEventListener("click", (event) => {
+            if (
+                event.target.closest(".image-message-container") ||
+                event.target.closest(".voice-message-container") ||
+                event.target.closest(".pin-button")
+            ) {
+                return;
+            }
+
             const lastMessage = messagesList.lastElementChild;
             if (lastMessage) {
                 lastMessage.scrollIntoView({ behavior: "smooth", block: "end" });
-                console.log("Scrolled to bottom on message click");
+                console.log("Đã cuộn xuống dưới khi nhấn tin nhắn");
             }
             const scrollToBottomBtn = document.getElementById("scrollToBottomBtn");
-            if (scrollToBottomBtn) {
-                scrollToBottomBtn.classList.remove("active");
-            }
+            if (scrollToBottomBtn) scrollToBottomBtn.classList.remove("active");
         });
 
-        li.querySelector(".pin-button").addEventListener("click", () => {
+        li.querySelector(".pin-button").addEventListener("click", (event) => {
+            event.stopPropagation();
             if (isPinned) {
-                connection.invoke("UnpinMessage", currentUser, messageId).catch(err => console.error("Error unpinning message:", err));
+                connection.invoke("UnpinMessage", currentUser, messageId).catch(err => console.error("Lỗi bỏ ghim tin nhắn:", err));
             } else {
-                connection.invoke("PinMessage", currentUser, messageId).catch(err => console.error("Error pinning message:", err));
+                connection.invoke("PinMessage", currentUser, messageId).catch(err => console.error("Lỗi ghim tin nhắn:", err));
             }
         });
 
@@ -557,10 +630,10 @@ connection.on("ReceiveMessage", (sender, message, receiver, messageType = "Text"
 });
 
 connection.on("ReceiveOlderMessages", (messages) => {
-    console.log(`Received older messages: ${messages.length} messages`);
+    console.log(`Nhận tin nhắn cũ: ${messages.length} tin nhắn`);
     const messagesList = document.getElementById("messagesList");
     if (!messagesList) {
-        console.error("Messages list element not found!");
+        console.error("Không tìm thấy danh sách tin nhắn!");
         return;
     }
 
@@ -603,7 +676,7 @@ connection.on("ReceiveOlderMessages", (messages) => {
         if (msg.MessageType === "Image") {
             content = `
                 <div class="image-message-container">
-                    <img src="${msg.FileUrl}" alt="Image" />
+                    <img src="${msg.FileUrl}" alt="Hình ảnh" />
                 </div>
             `;
         } else if (msg.MessageType === "File") {
@@ -627,7 +700,7 @@ connection.on("ReceiveOlderMessages", (messages) => {
                         <div class="file-name">${fileName}</div>
                         <div class="file-meta">
                             <span class="file-size">${formatFileSize(msg.FileSize || 0)}</span>
-                            <a href="${msg.FileUrl}" class="file-link" target="_blank">Download</a>
+                            <a href="${msg.FileUrl}" class="file-link" target="_blank">Tải xuống</a>
                         </div>
                     </div>
                 </div>
@@ -659,7 +732,7 @@ connection.on("ReceiveOlderMessages", (messages) => {
                     </div>
                     <audio class="voice-audio" style="display: none;">
                         <source src="${msg.FileUrl}" type="audio/mp3">
-                        Your browser does not support the audio element.
+                        Trình duyệt của bạn không hỗ trợ phát âm thanh.
                     </audio>
                 </div>
             `;
@@ -670,8 +743,8 @@ connection.on("ReceiveOlderMessages", (messages) => {
             <div class="content">
                 <span>${content}</span>
                 <small>${messageDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</small>
-                ${msg.Sender === currentUser ? `<small class="seen-indicator text-success" style="display: ${msg.IsSeen ? 'inline' : 'none'};" title="Seen"><i class="fas fa-check-double"></i></small>` : ""}
-                <button class="pin-button btn btn-sm btn-outline-secondary">${msg.IsPinned ? "Unpin" : "Pin"}</button>
+                ${msg.Sender === currentUser ? `<small class="seen-indicator text-success" style="display: ${msg.IsSeen ? 'inline' : 'none'};" title="Đã xem"><i class="fas fa-check-double"></i></small>` : ""}
+                <button class="pin-button btn btn-sm btn-outline-secondary">${msg.IsPinned ? "Bỏ ghim" : "Ghim"}</button>
             </div>
         `;
         messagesList.insertBefore(li, messagesList.firstChild);
@@ -685,33 +758,31 @@ connection.on("ReceiveOlderMessages", (messages) => {
             const waveformBars = container.querySelector('.voice-waveform-bars');
             const progressBar = container.querySelector('.voice-progress-bar');
 
-            // Thêm kiểm tra lỗi khi tải file âm thanh
             audio.onerror = () => {
-                console.error(`Failed to load audio from ${msg.FileUrl}`);
-                durationSpan.textContent = "Error";
+                console.error(`Không thể tải âm thanh từ ${msg.FileUrl}`);
+                durationSpan.textContent = "Lỗi";
                 durationSpan.style.color = "red";
             };
 
-            // Tải file âm thanh và lấy thời lượng
             audio.onloadedmetadata = () => {
                 const duration = audio.duration;
-                console.log(`Audio duration for ${msg.FileUrl}: ${duration} seconds`);
+                console.log(`Thời lượng âm thanh cho ${msg.FileUrl}: ${duration} giây`);
                 if (!isFinite(duration) || duration <= 0) {
-                    durationSpan.textContent = "Error";
+                    durationSpan.textContent = "Lỗi";
                     durationSpan.style.color = "red";
                 } else {
                     durationSpan.textContent = formatRecordingTime(Math.round(duration));
                 }
             };
 
-            // Buộc tải lại file âm thanh để đảm bảo sự kiện onloadedmetadata được gọi
             audio.load();
 
-            playButton.addEventListener('click', () => {
+            playButton.addEventListener('click', (event) => {
+                event.stopPropagation();
                 if (audio.paused) {
                     audio.play().catch(err => {
-                        console.error(`Error playing audio from ${msg.FileUrl}:`, err);
-                        toastr.error("Failed to play audio. Please check the file.");
+                        console.error(`Lỗi phát âm thanh từ ${msg.FileUrl}:`, err);
+                        toastr.error("Không thể phát âm thanh. Vui lòng kiểm tra file.");
                     });
                     playButton.classList.remove('fa-play');
                     playButton.classList.add('fa-pause');
@@ -748,12 +819,13 @@ connection.on("ReceiveOlderMessages", (messages) => {
 
         if (msg.MessageType === "Image") {
             const img = li.querySelector('.image-message-container img');
-            img.addEventListener('click', () => {
+            img.addEventListener('click', (event) => {
+                event.stopPropagation();
                 const lightbox = document.createElement('div');
                 lightbox.className = 'image-lightbox';
                 lightbox.innerHTML = `
                     <div class="lightbox-content">
-                        <img src="${msg.FileUrl}" alt="Image" class="lightbox-image" />
+                        <img src="${msg.FileUrl}" alt="Hình ảnh" class="lightbox-image" />
                         <span class="lightbox-close">×</span>
                     </div>
                 `;
@@ -779,23 +851,30 @@ connection.on("ReceiveOlderMessages", (messages) => {
             });
         }
 
-        li.addEventListener("click", () => {
+        li.addEventListener("click", (event) => {
+            if (
+                event.target.closest(".image-message-container") ||
+                event.target.closest(".voice-message-container") ||
+                event.target.closest(".pin-button")
+            ) {
+                return;
+            }
+
             const lastMessage = messagesList.lastElementChild;
             if (lastMessage) {
                 lastMessage.scrollIntoView({ behavior: "smooth", block: "end" });
-                console.log("Scrolled to bottom on older message click");
+                console.log("Đã cuộn xuống dưới khi nhấn tin nhắn cũ");
             }
             const scrollToBottomBtn = document.getElementById("scrollToBottomBtn");
-            if (scrollToBottomBtn) {
-                scrollToBottomBtn.classList.remove("active");
-            }
+            if (scrollToBottomBtn) scrollToBottomBtn.classList.remove("active");
         });
 
-        li.querySelector(".pin-button").addEventListener("click", () => {
+        li.querySelector(".pin-button").addEventListener("click", (event) => {
+            event.stopPropagation();
             if (msg.IsPinned) {
-                connection.invoke("UnpinMessage", currentUser, msg.Id).catch(err => console.error("Error unpinning message:", err));
+                connection.invoke("UnpinMessage", currentUser, msg.Id).catch(err => console.error("Lỗi bỏ ghim tin nhắn:", err));
             } else {
-                connection.invoke("PinMessage", currentUser, msg.Id).catch(err => console.error("Error pinning message:", err));
+                connection.invoke("PinMessage", currentUser, msg.Id).catch(err => console.error("Lỗi ghim tin nhắn:", err));
             }
         });
     });
@@ -803,27 +882,22 @@ connection.on("ReceiveOlderMessages", (messages) => {
     messagesList.scrollTop = messagesList.scrollHeight - currentScrollHeight;
 });
 
-// Thêm sự kiện MessageSeen để cập nhật giao diện
 connection.on("MessageSeen", (messageId) => {
-    console.log(`Received MessageSeen for message ${messageId}`);
+    console.log(`Nhận MessageSeen cho tin nhắn ${messageId}`);
     const messageElement = document.querySelector(`.message[data-message-id="${messageId}"]`);
     if (messageElement) {
-        console.log(`Updating seen status for message ${messageId}`);
+        console.log(`Cập nhật trạng thái đã xem cho tin nhắn ${messageId}`);
         messageElement.dataset.seen = "true";
         const seenIndicator = messageElement.querySelector(".seen-indicator");
         if (seenIndicator) {
             seenIndicator.style.display = "inline";
-            console.log(`Displayed seen indicator for message ${messageId}`);
-        } else {
-            console.error(`Seen indicator not found for message ${messageId}`);
+            console.log(`Hiển thị biểu tượng đã xem cho tin nhắn ${messageId}`);
         }
-    } else {
-        console.error(`Message element with ID ${messageId} not found`);
     }
 });
 
 connection.on("ReceiveNewMessageNotification", (sender) => {
-    console.log(`New message notification from ${sender}`);
+    console.log(`Thông báo tin nhắn mới từ ${sender}`);
     if (sender !== currentFriend) {
         if ("Notification" in window) {
             const requestNotificationPermission = async () => {
@@ -832,36 +906,33 @@ connection.on("ReceiveNewMessageNotification", (sender) => {
             };
 
             const sendNotification = () => {
-                const notification = new Notification(`New message from ${sender}`, {
-                    body: "You have a new message!",
+                const notification = new Notification(`Tin nhắn mới từ ${sender}`, {
+                    body: "Bạn có tin nhắn mới!",
                     icon: "/images/avatars/default.jpg"
                 });
                 notification.onclick = () => {
                     currentFriend = sender;
                     localStorage.setItem("currentFriend", currentFriend);
-                    document.getElementById("chat-intro").textContent = `Chat with ${sender}`;
+                    document.getElementById("chat-intro").textContent = `Chat với ${sender}`;
                     document.getElementById("messagesList").innerHTML = "";
                     const loadingSpinner = document.getElementById("loadingSpinner");
-                    if (loadingSpinner) {
-                        loadingSpinner.classList.add("active");
-                    }
+                    if (loadingSpinner) loadingSpinner.classList.add("active");
+
                     connection.invoke("LoadMessages", currentUser, sender).catch(err => {
-                        console.error("Error loading messages:", err);
+                        console.error("Lỗi tải tin nhắn:", err);
                     }).finally(() => {
-                        if (loadingSpinner) {
-                            loadingSpinner.classList.remove("active");
-                        }
+                        if (loadingSpinner) loadingSpinner.classList.remove("active");
                         const messagesList = document.getElementById("messagesList");
                         const scrollToBottom = (retryCount = 0) => {
                             setTimeout(() => {
                                 const lastMessage = messagesList.lastElementChild;
                                 if (lastMessage) {
                                     lastMessage.scrollIntoView({ behavior: "smooth", block: "end" });
-                                    console.log(`Scroll height after loading messages (notification): ${messagesList.scrollHeight}, ScrollTop: ${messagesList.scrollTop}, ClientHeight: ${messagesList.clientHeight}`);
+                                    console.log(`Scroll height sau khi tải tin nhắn (thông báo): ${messagesList.scrollHeight}, ScrollTop: ${messagesList.scrollTop}, ClientHeight: ${messagesList.clientHeight}`);
                                 }
                                 setTimeout(() => {
                                     if (messagesList.scrollTop + messagesList.clientHeight < messagesList.scrollHeight - 50 && retryCount < 3) {
-                                        console.log(`Scroll to bottom failed after loading messages (notification), retrying (${retryCount + 1})...`);
+                                        console.log(`Cuộn xuống dưới thất bại sau khi tải tin nhắn (thông báo), thử lại (${retryCount + 1})...`);
                                         scrollToBottom(retryCount + 1);
                                     }
                                 }, 100);
@@ -881,14 +952,10 @@ connection.on("ReceiveNewMessageNotification", (sender) => {
                     if (permission === "granted") {
                         sendNotification();
                     } else {
-                        console.log("Notification permission denied by user.");
+                        console.log("Người dùng đã từ chối quyền thông báo.");
                     }
                 });
-            } else {
-                console.log("Notification permission already denied.");
             }
-        } else {
-            console.log("This browser does not support notifications.");
         }
     }
 });
@@ -898,38 +965,26 @@ connection.on("MessagePinned", (messageId, isPinned) => {
     if (messageElement) {
         messageElement.classList.toggle("pinned", isPinned);
         const pinButton = messageElement.querySelector(".pin-button");
-        pinButton.textContent = isPinned ? "Unpin" : "Pin";
+        pinButton.textContent = isPinned ? "Bỏ ghim" : "Ghim";
     }
 });
 
 connection.on("ReceiveTyping", (sender) => {
-    console.log(`Received typing from ${sender}`);
     if (sender === currentFriend) {
         const typingIndicator = document.getElementById("typingIndicator");
-        if (typingIndicator) {
-            typingIndicator.classList.add("active");
-            console.log("Typing indicator shown");
-        } else {
-            console.error("Typing indicator element not found!");
-        }
+        if (typingIndicator) typingIndicator.classList.add("active");
     }
 });
 
 connection.on("ReceiveStopTyping", (sender) => {
-    console.log(`Received stop typing from ${sender}`);
     if (sender === currentFriend) {
         const typingIndicator = document.getElementById("typingIndicator");
-        if (typingIndicator) {
-            typingIndicator.classList.remove("active");
-            console.log("Typing indicator hidden");
-        } else {
-            console.error("Typing indicator element not found!");
-        }
+        if (typingIndicator) typingIndicator.classList.remove("active");
     }
 });
 
 connection.on("ReceiveUnreadCounts", (unreadCounts) => {
-    console.log("Unread counts:", unreadCounts);
+    console.log("Số tin nhắn chưa đọc:", unreadCounts);
     const friendList = document.getElementById("friendList").getElementsByTagName("li");
     for (let item of friendList) {
         const username = item.dataset.username;
@@ -959,7 +1014,7 @@ connection.on("ReceiveUserStatus", (username, isOnline) => {
             if (isOnline) {
                 offlineSpan.textContent = "";
             } else {
-                connection.invoke("GetLastOnline", currentUser, username).catch(err => console.error("Error getting last online:", err));
+                connection.invoke("GetLastOnline", currentUser, username).catch(err => console.error("Lỗi lấy thời gian online cuối:", err));
             }
 
             if (username === currentFriend) {
@@ -988,13 +1043,13 @@ connection.on("ReceiveFriends", (friends, friendStatuses) => {
             <span class="last-offline"></span>
         `;
         if (!friendStatuses[friend]) {
-            connection.invoke("GetLastOnline", currentUser, friend).catch(err => console.error("Error getting last online:", err));
+            connection.invoke("GetLastOnline", currentUser, friend).catch(err => console.error("Lỗi lấy thời gian online cuối:", err));
         }
         li.onclick = () => {
             currentFriend = friend;
             localStorage.setItem("currentFriend", currentFriend);
 
-            document.getElementById("chat-intro").textContent = `Chat with ${friend}`;
+            document.getElementById("chat-intro").textContent = `Chat với ${friend}`;
 
             const avatarContainer = document.getElementById("chatUserAvatarContainer");
             const avatarImg = document.getElementById("chatUserAvatar");
@@ -1013,9 +1068,7 @@ connection.on("ReceiveFriends", (friends, friendStatuses) => {
             document.getElementById("messagesList").innerHTML = "";
             oldestMessageId = null;
             const loadingSpinner = document.getElementById("loadingSpinner");
-            if (loadingSpinner) {
-                loadingSpinner.classList.add("active");
-            }
+            if (loadingSpinner) loadingSpinner.classList.add("active");
 
             const pendingMessages = JSON.parse(localStorage.getItem("pendingMessages") || "{}");
             if (pendingMessages[friend]) {
@@ -1027,22 +1080,20 @@ connection.on("ReceiveFriends", (friends, friendStatuses) => {
             }
 
             connection.invoke("LoadMessages", currentUser, friend).catch(err => {
-                console.error("Error loading messages:", err);
+                console.error("Lỗi tải tin nhắn:", err);
             }).finally(() => {
-                if (loadingSpinner) {
-                    loadingSpinner.classList.remove("active");
-                }
+                if (loadingSpinner) loadingSpinner.classList.remove("active");
                 const messagesList = document.getElementById("messagesList");
                 const scrollToBottom = (retryCount = 0) => {
                     setTimeout(() => {
                         const lastMessage = messagesList.lastElementChild;
                         if (lastMessage) {
                             lastMessage.scrollIntoView({ behavior: "smooth", block: "end" });
-                            console.log(`Scroll height after loading messages: ${messagesList.scrollHeight}, ScrollTop: ${messagesList.scrollTop}, ClientHeight: ${messagesList.clientHeight}`);
+                            console.log(`Scroll height sau khi tải tin nhắn: ${messagesList.scrollHeight}, ScrollTop: ${messagesList.scrollTop}, ClientHeight: ${messagesList.clientHeight}`);
                         }
                         setTimeout(() => {
                             if (messagesList.scrollTop + messagesList.clientHeight < messagesList.scrollHeight - 50 && retryCount < 3) {
-                                console.log(`Scroll to bottom failed after loading messages, retrying (${retryCount + 1})...`);
+                                console.log(`Cuộn xuống dưới thất bại sau khi tải tin nhắn, thử lại (${retryCount + 1})...`);
                                 scrollToBottom(retryCount + 1);
                             }
                         }, 100);
@@ -1061,7 +1112,7 @@ connection.on("ReceiveFriends", (friends, friendStatuses) => {
 
 connection.on("ReceiveFriendRequests", (requests) => {
     const friendRequests = document.getElementById("friendRequests");
-    friendRequests.innerHTML = requests.length > 0 ? "<h6>Friend Requests</h6>" : "";
+    friendRequests.innerHTML = requests.length > 0 ? "<h6 class='text-muted mb-2 friend-section-title'>Friend Requests</h6>" : "";
     requests.forEach(requester => {
         const div = document.createElement("div");
         div.className = "request-item";
@@ -1079,21 +1130,15 @@ connection.on("ReceiveFriendRequests", (requests) => {
 connection.on("ReceiveFriendRequest", (sender) => {
     document.getElementById("friendRequestSender").textContent = sender;
     const friendRequestModal = document.getElementById("friendRequestModal");
-    if (friendRequestModal) {
-        friendRequestModal.classList.remove("d-none");
-    }
+    if (friendRequestModal) friendRequestModal.classList.remove("d-none");
 
     document.getElementById("acceptFriendRequestButton").onclick = () => {
-        if (friendRequestModal) {
-            friendRequestModal.classList.add("d-none");
-        }
+        if (friendRequestModal) friendRequestModal.classList.add("d-none");
         connection.invoke("AcceptFriendRequest", currentUser, sender).catch(err => console.error(err));
     };
 
     document.getElementById("declineFriendRequestButton").onclick = () => {
-        if (friendRequestModal) {
-            friendRequestModal.classList.add("d-none");
-        }
+        if (friendRequestModal) friendRequestModal.classList.add("d-none");
         connection.invoke("DeclineFriendRequest", currentUser, sender).catch(err => console.error(err));
     };
 });
@@ -1109,24 +1154,24 @@ connection.on("FriendRequestDeclined", (decliner) => {
 });
 
 connection.on("ReceiveError", (message) => {
-    console.log("Error received:", message);
+    console.log("Lỗi nhận được:", message);
     alert(message);
 });
 
 connection.on("ReceiveSuccess", (message) => {
-    console.log("Success received:", message);
+    console.log("Thành công nhận được:", message);
     alert(message);
 });
 
 connection.on("ReceiveLastOnline", (friend, lastOnline) => {
-    console.log(`Received LastOnline for ${friend}: ${lastOnline}`);
+    console.log(`Nhận LastOnline cho ${friend}: ${lastOnline}`);
     const friendItems = document.getElementById("friendList").getElementsByTagName("li");
     for (let item of friendItems) {
         if (item.dataset.username === friend) {
             const offlineSpan = item.querySelector(".last-offline");
             if (lastOnline) {
                 const lastOnlineDate = new Date(lastOnline);
-                console.log(`Parsed LastOnline for ${friend}: ${lastOnlineDate}`);
+                console.log(`Parsed LastOnline cho ${friend}: ${lastOnlineDate}`);
                 updateLastOfflineTime(offlineSpan, lastOnlineDate);
             }
             break;
@@ -1136,12 +1181,12 @@ connection.on("ReceiveLastOnline", (friend, lastOnline) => {
 
 function updateLastOfflineTime(element, lastOnline) {
     const now = new Date();
-    console.log(`Current time: ${now}, LastOnline: ${lastOnline}`);
-    const diff = Math.round((now - lastOnline) / 60000); // diff in minutes
+    console.log(`Thời gian hiện tại: ${now}, LastOnline: ${lastOnline}`);
+    const diff = Math.round((now - lastOnline) / 60000);
     if (diff < 1) {
         element.textContent = "Offline just now";
     } else if (diff < 60) {
-        element.textContent = `Offline ${diff} mins ago`;
+        element.textContent = `Offline ${diff} minutes ago`;
     } else if (diff < 1440) {
         const hours = Math.round(diff / 60);
         element.textContent = `Offline ${hours} hours ago`;
@@ -1157,10 +1202,10 @@ function updateLastOfflineTime(element, lastOnline) {
 document.getElementById("searchUser").addEventListener("input", async () => {
     const query = document.getElementById("searchUser").value.trim();
     if (query) {
-        console.log(`Searching for users with query: ${query}`);
+        console.log(`Tìm kiếm người dùng với query: ${query}`);
         const response = await fetch(`/User/SearchUsers?query=${encodeURIComponent(query)}`);
         const data = await response.json();
-        console.log("Search results:", data);
+        console.log("Kết quả tìm kiếm:", data);
         const searchResults = document.getElementById("searchResults");
         searchResults.innerHTML = "";
         data.users.forEach(user => {
@@ -1175,13 +1220,11 @@ document.getElementById("searchUser").addEventListener("input", async () => {
                 div.querySelector("button").onclick = () => {
                     currentFriend = user;
                     localStorage.setItem("currentFriend", currentFriend);
-                    document.getElementById("chat-intro").textContent = `Chat with ${user}`;
+                    document.getElementById("chat-intro").textContent = `Chat với ${user}`;
                     document.getElementById("messagesList").innerHTML = "";
                     oldestMessageId = null;
                     const loadingSpinner = document.getElementById("loadingSpinner");
-                    if (loadingSpinner) {
-                        loadingSpinner.classList.add("active");
-                    }
+                    if (loadingSpinner) loadingSpinner.classList.add("active");
 
                     const pendingMessages = JSON.parse(localStorage.getItem("pendingMessages") || "{}");
                     if (pendingMessages[user]) {
@@ -1193,22 +1236,20 @@ document.getElementById("searchUser").addEventListener("input", async () => {
                     }
 
                     connection.invoke("LoadMessages", currentUser, user).catch(err => {
-                        console.error("Error loading messages:", err);
+                        console.error("Lỗi tải tin nhắn:", err);
                     }).finally(() => {
-                        if (loadingSpinner) {
-                            loadingSpinner.classList.remove("active");
-                        }
+                        if (loadingSpinner) loadingSpinner.classList.remove("active");
                         const messagesList = document.getElementById("messagesList");
                         const scrollToBottom = (retryCount = 0) => {
                             setTimeout(() => {
                                 const lastMessage = messagesList.lastElementChild;
                                 if (lastMessage) {
                                     lastMessage.scrollIntoView({ behavior: "smooth", block: "end" });
-                                    console.log(`Scroll height after loading messages: ${messagesList.scrollHeight}, ScrollTop: ${messagesList.scrollTop}, ClientHeight: ${messagesList.clientHeight}`);
+                                    console.log(`Scroll height sau khi tải tin nhắn: ${messagesList.scrollHeight}, ScrollTop: ${messagesList.scrollTop}, ClientHeight: ${messagesList.clientHeight}`);
                                 }
                                 setTimeout(() => {
                                     if (messagesList.scrollTop + messagesList.clientHeight < messagesList.scrollHeight - 50 && retryCount < 3) {
-                                        console.log(`Scroll to bottom failed after loading messages, retrying (${retryCount + 1})...`);
+                                        console.log(`Cuộn xuống dưới thất bại sau khi tải tin nhắn, thử lại (${retryCount + 1})...`);
                                         scrollToBottom(retryCount + 1);
                                     }
                                 }, 100);
@@ -1222,9 +1263,9 @@ document.getElementById("searchUser").addEventListener("input", async () => {
                 };
             } else {
                 div.querySelector("button").onclick = () => {
-                    console.log(`Sending friend request from ${currentUser} to ${user}`);
+                    console.log(`Gửi lời mời kết bạn từ ${currentUser} đến ${user}`);
                     connection.invoke("SendFriendRequest", currentUser, user).catch(err => {
-                        console.error("Error sending friend request:", err);
+                        console.error("Lỗi gửi lời mời kết bạn:", err);
                     });
                 };
             }
@@ -1253,12 +1294,12 @@ document.getElementById("messageInput").addEventListener("keypress", (event) => 
 
 document.getElementById("messageInput").addEventListener("input", () => {
     if (currentFriend) {
-        console.log(`Sending typing event to ${currentFriend}`);
-        connection.invoke("SendTyping", currentUser, currentFriend).catch(err => console.error("Error sending typing:", err));
+        console.log(`Gửi sự kiện đang gõ đến ${currentFriend}`);
+        connection.invoke("SendTyping", currentUser, currentFriend).catch(err => console.error("Lỗi gửi đang gõ:", err));
         clearTimeout(typingTimeout);
         typingTimeout = setTimeout(() => {
-            console.log(`Sending stop typing event to ${currentFriend}`);
-            connection.invoke("StopTyping", currentUser, currentFriend).catch(err => console.error("Error stopping typing:", err));
+            console.log(`Gửi sự kiện dừng gõ đến ${currentFriend}`);
+            connection.invoke("StopTyping", currentUser, currentFriend).catch(err => console.error("Lỗi dừng gõ:", err));
         }, 2000);
     }
 });
@@ -1272,7 +1313,7 @@ document.getElementById("fileInput").addEventListener("change", async () => {
     if (file && currentFriend) {
         const formData = new FormData();
         formData.append("file", file);
-        const fileSize = file.size; // Lấy kích thước file tại client
+        const fileSize = file.size;
         const response = await fetch("/api/upload", {
             method: "POST",
             body: formData
@@ -1285,51 +1326,66 @@ document.getElementById("fileInput").addEventListener("change", async () => {
     }
 });
 
-async function startVideoCall(targetUser) {
+async function startCall(targetUser, videoEnabled = false) {
     if (peer || localStream) {
-        alert("A call is already in progress. Please end the current call first.");
+        alert("There is already an ongoing call. Please end the current call first.");
         return;
     }
 
     if (connection.state !== signalR.HubConnectionState.Connected) {
-        alert("Cannot start a call because the server connection is not active. Retrying connection...");
+        alert("Cannot start the call because the server connection is not active. Retrying connection...");
         await startConnection();
         return;
     }
 
     try {
-        localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
-        const localVideo = document.getElementById("localVideo");
-        if (localVideo) {
-            localVideo.srcObject = localStream;
-        }
-        const localUserLabel = document.getElementById("localUserLabel");
-        if (localUserLabel) {
-            localUserLabel.textContent = currentUser;
-        }
-        const remoteUserLabel = document.getElementById("remoteUserLabel");
-        if (remoteUserLabel) {
-            remoteUserLabel.textContent = targetUser;
-        }
+        isVideoCall = videoEnabled;
+        const constraints = { video: videoEnabled, audio: true };
+        localStream = await navigator.mediaDevices.getUserMedia(constraints);
+
+        // Cập nhật giao diện
         const videoContainer = document.getElementById("videoContainer");
-        if (videoContainer) {
+        const voiceCallContainer = document.getElementById("voiceCallContainer");
+        const localVideo = document.getElementById("localVideo");
+        const remoteVideo = document.getElementById("remoteVideo");
+        const localUserLabel = document.getElementById("localUserLabel");
+        const remoteUserLabel = document.getElementById("remoteUserLabel");
+        const localAvatar = document.getElementById("localAvatar");
+        const remoteAvatar = document.getElementById("remoteAvatar");
+        const callTimer = document.getElementById("callTimer");
+
+        if (videoEnabled) {
             videoContainer.classList.remove("d-none");
+            voiceCallContainer.classList.add("d-none");
+            localVideo.srcObject = localStream;
+        } else {
+            voiceCallContainer.classList.remove("d-none");
+            videoContainer.classList.add("d-none");
+            localAvatar.src = `/images/avatars/${currentUser}.jpg`;
+            localAvatar.onerror = () => { localAvatar.src = '/images/avatars/default.jpg'; };
+            remoteAvatar.src = `/images/avatars/${targetUser}.jpg`;
+            remoteAvatar.onerror = () => { remoteAvatar.src = '/images/avatars/default.jpg'; };
         }
+
+        localUserLabel.textContent = currentUser;
+        remoteUserLabel.textContent = targetUser;
+        callTimer.textContent = "Connecting...";
 
         remoteUser = targetUser;
 
         peer = new SimplePeer({
             initiator: true,
             trickle: false,
-            stream: localStream
+            stream: localStream,
+            config: { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] }
         });
 
         peer.on("signal", data => {
             console.log("Sending signal to " + targetUser);
             if (connection.state === signalR.HubConnectionState.Connected) {
-                connection.invoke("SendSignal", targetUser, JSON.stringify(data)).catch(err => {
+                connection.invoke("SendSignal", targetUser, JSON.stringify(data), videoEnabled).catch(err => {
                     console.error("Error sending signal:", err);
-                    alert("Failed to send call signal. Please try again.");
+                    alert("Unable to send call signal. Please try again.");
                     endCall();
                 });
             } else {
@@ -1339,10 +1395,16 @@ async function startVideoCall(targetUser) {
         });
 
         peer.on("stream", stream => {
-            console.log("Received remote stream");
-            const remoteVideo = document.getElementById("remoteVideo");
-            if (remoteVideo) {
+            console.log("Receiving remote stream");
+            if (isVideoCall) {
                 remoteVideo.srcObject = stream;
+            } else {
+                // Tạo phần tử audio để phát âm thanh trong voice call
+                const audio = document.createElement('audio');
+                audio.id = 'remoteAudio';
+                audio.srcObject = stream;
+                audio.autoplay = true;
+                document.body.appendChild(audio);
             }
         });
 
@@ -1359,13 +1421,13 @@ async function startVideoCall(targetUser) {
 
     } catch (err) {
         console.error("Error accessing media devices:", err);
-        alert("Unable to access camera or microphone. Please check your permissions or device settings.");
+        alert("Unable to access microphone" + (videoEnabled ? " or camera" : "") + ". Please check permissions or device settings.");
         endCall();
     }
 }
 
-connection.on("ReceiveSignal", async (sender, signalData) => {
-    console.log("Received signal from " + sender);
+connection.on("ReceiveSignal", async (sender, signalData, videoEnabled) => {
+    console.log("Receiving signal from " + sender + ", videoEnabled: " + videoEnabled);
 
     if (connection.state !== signalR.HubConnectionState.Connected) {
         console.error("Cannot process signal because SignalR connection is not active.");
@@ -1374,56 +1436,65 @@ connection.on("ReceiveSignal", async (sender, signalData) => {
 
     if (!peer) {
         incomingCaller = sender;
+        isVideoCall = videoEnabled;
         const callerName = document.getElementById("callerName");
-        if (callerName) {
-            callerName.textContent = sender;
-        }
+        if (callerName) callerName.textContent = sender;
         const callModal = document.getElementById("callModal");
-        if (callModal) {
-            callModal.classList.remove("d-none");
-        } else {
-            console.error("Call modal element not found!");
-            return;
-        }
+        if (callModal) callModal.classList.remove("d-none");
 
         document.getElementById("acceptCallButton").onclick = async () => {
-            if (callModal) {
-                callModal.classList.add("d-none");
-            }
+            if (callModal) callModal.classList.add("d-none");
             try {
-                localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
-                const localVideo = document.getElementById("localVideo");
-                if (localVideo) {
-                    localVideo.srcObject = localStream;
-                }
-                const localUserLabel = document.getElementById("localUserLabel");
-                if (localUserLabel) {
-                    localUserLabel.textContent = currentUser;
-                }
-                const remoteUserLabel = document.getElementById("remoteUserLabel");
-                if (remoteUserLabel) {
-                    remoteUserLabel.textContent = sender;
-                }
+                const constraints = { video: isVideoCall, audio: true };
+                localStream = await navigator.mediaDevices.getUserMedia(constraints);
+
                 const videoContainer = document.getElementById("videoContainer");
-                if (videoContainer) {
+                const voiceCallContainer = document.getElementById("voiceCallContainer");
+                const localVideo = document.getElementById("localVideo");
+                const remoteVideo = document.getElementById("remoteVideo");
+                const localUserLabel = document.getElementById("localUserLabel");
+                const remoteUserLabel = document.getElementById("remoteUserLabel");
+                const localAvatar = document.getElementById("localAvatar");
+                const remoteAvatar = document.getElementById("remoteAvatar");
+                const callTimer = document.getElementById("callTimer");
+
+                if (isVideoCall) {
                     videoContainer.classList.remove("d-none");
+                    voiceCallContainer.classList.add("d-none");
+                    localVideo.srcObject = localStream;
+                } else {
+                    voiceCallContainer.classList.remove("d-none");
+                    videoContainer.classList.add("d-none");
+                    localAvatar.src = `/images/avatars/${currentUser}.jpg`;
+                    localAvatar.onerror = () => { localAvatar.src = '/images/avatars/default.jpg'; };
+                    remoteAvatar.src = `/images/avatars/${sender}.jpg`;
+                    remoteAvatar.onerror = () => { remoteAvatar.src = '/images/avatars/default.jpg'; };
                 }
+
+                localUserLabel.textContent = currentUser;
+                remoteUserLabel.textContent = sender;
+                callTimer.textContent = "Connecting...";
 
                 remoteUser = sender;
 
                 peer = new SimplePeer({
                     initiator: false,
                     trickle: false,
-                    stream: localStream
+                    stream: localStream,
+                    config: { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] }
                 });
 
                 peer.on("signal", data => {
                     console.log("Sending response signal to " + sender);
                     if (connection.state === signalR.HubConnectionState.Connected) {
-                        connection.invoke("SendSignal", sender, JSON.stringify(data)).catch(err => {
+                        connection.invoke("SendSignal", sender, JSON.stringify(data), isVideoCall).catch(err => {
                             console.error("Error sending response signal:", err);
-                            alert("Failed to send response signal. Please try again.");
+                            alert("Unable to send response signal. Please try again.");
                             endCall();
+                        });
+                        // Gửi tín hiệu CallAccepted để đồng bộ thời gian
+                        connection.invoke("CallAccepted", sender).catch(err => {
+                            console.error("Error sending CallAccepted signal:", err);
                         });
                     } else {
                         alert("Cannot send response signal because the server connection is not active.");
@@ -1432,10 +1503,16 @@ connection.on("ReceiveSignal", async (sender, signalData) => {
                 });
 
                 peer.on("stream", stream => {
-                    console.log("Received remote stream");
-                    const remoteVideo = document.getElementById("remoteVideo");
-                    if (remoteVideo) {
+                    console.log("Receiving remote stream");
+                    if (isVideoCall) {
                         remoteVideo.srcObject = stream;
+                    } else {
+                        // Tạo phần tử audio để phát âm thanh trong voice call
+                        const audio = document.createElement('audio');
+                        audio.id = 'remoteAudio';
+                        audio.srcObject = stream;
+                        audio.autoplay = true;
+                        document.body.appendChild(audio);
                     }
                 });
 
@@ -1453,15 +1530,13 @@ connection.on("ReceiveSignal", async (sender, signalData) => {
                 peer.signal(JSON.parse(signalData));
             } catch (err) {
                 console.error("Error accessing media devices:", err);
-                alert("Unable to access camera or microphone. Please check your permissions or device settings.");
+                alert("Unable to access microphone" + (isVideoCall ? " or camera" : "") + ". Please check permissions or device settings.");
                 endCall();
             }
         };
 
         document.getElementById("declineCallButton").onclick = () => {
-            if (callModal) {
-                callModal.classList.add("d-none");
-            }
+            if (callModal) callModal.classList.add("d-none");
             connection.invoke("SendCallEnded", sender).catch(err => console.error(err));
             incomingCaller = null;
         };
@@ -1470,7 +1545,7 @@ connection.on("ReceiveSignal", async (sender, signalData) => {
             peer.signal(JSON.parse(signalData));
         } catch (err) {
             console.error("Error processing signal data:", err);
-            alert("Failed to process call signal. Please try again.");
+            alert("Unable to process call signal. Please try again.");
             endCall();
         }
     }
@@ -1490,17 +1565,41 @@ function endCall() {
         localStream = null;
     }
     const localVideo = document.getElementById("localVideo");
-    if (localVideo) {
-        localVideo.srcObject = null;
-    }
     const remoteVideo = document.getElementById("remoteVideo");
-    if (remoteVideo) {
-        remoteVideo.srcObject = null;
-    }
     const videoContainer = document.getElementById("videoContainer");
-    if (videoContainer) {
-        videoContainer.classList.add("d-none");
+    const voiceCallContainer = document.getElementById("voiceCallContainer");
+    const callTimer = document.getElementById("callTimer");
+    const toggleMuteButton = document.getElementById("toggleMuteButton");
+    const toggleMuteButtonVoice = document.getElementById("toggleMuteButtonVoice");
+    const toggleVideoButton = document.getElementById("toggleVideoButton");
+    const remoteAudio = document.getElementById("remoteAudio");
+
+    if (localVideo) localVideo.srcObject = null;
+    if (remoteVideo) remoteVideo.srcObject = null;
+    if (remoteAudio) {
+        remoteAudio.srcObject = null;
+        remoteAudio.remove();
     }
+    if (videoContainer) videoContainer.classList.add("d-none");
+    if (voiceCallContainer) voiceCallContainer.classList.add("d-none");
+    if (callTimer) callTimer.textContent = "Connecting...";
+    if (toggleMuteButton) {
+        toggleMuteButton.innerHTML = '<i class="fas fa-microphone"></i>';
+        toggleMuteButton.title = "Mute";
+    }
+    if (toggleMuteButtonVoice) {
+        toggleMuteButtonVoice.innerHTML = '<i class="fas fa-microphone"></i>';
+        toggleMuteButtonVoice.title = "Mute";
+    }
+    if (toggleVideoButton) {
+        toggleVideoButton.innerHTML = '<i class="fas fa-video"></i>';
+        toggleVideoButton.title = "Turn Camera Off";
+    }
+
+    clearInterval(callTimerInterval);
+    callTimerInterval = null;
+    callStartTime = null;
+
     if (incomingCaller || remoteUser) {
         const target = incomingCaller || remoteUser;
         if (connection.state === signalR.HubConnectionState.Connected) {
@@ -1509,16 +1608,21 @@ function endCall() {
         incomingCaller = null;
         remoteUser = null;
     }
+    isVideoCall = false;
 }
 
-document.getElementById("startVideoCall").addEventListener("click", () => {
+document.getElementById("startCall").addEventListener("click", () => {
     if (currentFriend) {
-        startVideoCall(currentFriend);
+        startCall(currentFriend, false);
     } else {
         alert("Please select a friend to call.");
     }
 });
 
-document.getElementById("endCallButton").addEventListener("click", () => {
-    endCall();
+document.getElementById("startVideoCall").addEventListener("click", () => {
+    if (currentFriend) {
+        startCall(currentFriend, true);
+    } else {
+        alert("Please select a friend to call.");
+    }
 });
