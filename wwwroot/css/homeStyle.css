@@ -63,7 +63,7 @@ body {
     font-size: 3rem;
     line-height: 1.2;
     margin-bottom: 1.5rem;
-    animation: fadeInUp 1s ease-out;
+    animation: fadeInUp 2s ease-out;
 }
 
 .text-gradient {
@@ -81,9 +81,14 @@ body {
     animation-fill-mode: both;
 }
 
+    .hero-description .cta-buttons a {
+        z-index: 1000;
+    }
+
 .cta-buttons {
     animation: fadeInUp 1s ease-out 0.6s;
     animation-fill-mode: both;
+    z-index: 1000;
 }
 
 .btn-gradient {
@@ -91,6 +96,7 @@ body {
     border: none;
     color: white;
     transition: all 0.3s ease;
+    z-index: 1000;
 }
 
     .btn-gradient:hover {
@@ -462,5 +468,10 @@ body.dark-mode {
             background-color: #3d3d3d;
         }
 
+.message-bubbles .bubble-avatar .avt-user {
+    width: 60px;
+    height: 60px;
+    object-fit: cover;
+}
 /* Preload Font */
 @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap');

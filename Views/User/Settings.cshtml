@@ -73,22 +73,6 @@
                                 </div>
                                 <div class="form-text text-muted">We'll never share your email</div>
                             </div>
-
-                            <!-- Full Name -->
-                            <div class="col-md-6">
-                                <div class="form-floating">
-                                    <input type="text" id="fullNameInput" name="fullName" class="form-control" placeholder="Enter your full name" />
-                                    <label for="fullNameInput">Full Name</label>
-                                </div>
-                            </div>
-
-                            <!-- Bio -->
-                            <div class="col-md-6">
-                                <div class="form-floating">
-                                    <input type="text" id="bioInput" name="bio" class="form-control" placeholder="Short bio" />
-                                    <label for="bioInput">Bio</label>
-                                </div>
-                            </div>
                         </div>
 
                         <div class="settings-divider mt-5"><span>Preferences</span></div>
@@ -274,5 +258,34 @@
 }
 
 @section Scripts {
-    <script src="/js/settingsScripts.js"></script>
+    <script>
+        // Hàm để preview avatar khi người dùng chọn file
+        function previewAvatar(event) {
+            const input = event.target;
+            if (input.files && input.files[0]) {
+                const reader = new FileReader();
+                reader.onload = function (e) {
+                    document.getElementById('avatarPreview').src = e.target.result;
+                };
+                reader.readAsDataURL(input.files[0]);
+            }
+        }
+
+        // Tự động điền thông tin người dùng khi trang được tải
+        document.addEventListener("DOMContentLoaded", async () => {
+            try {
+                const response = await fetch("/User/GetUserInfo");
+                const data = await response.json();
+
+                if (data.email) {
+                    document.getElementById("emailInput").value = data.email;
+                }
+                if (data.avatarUrl) {
+                    document.getElementById("avatarPreview").src = data.avatarUrl;
+                }
+            } catch (err) {
+                console.error("Error fetching user info:", err);
+            }
+        });
+    </script>
 }

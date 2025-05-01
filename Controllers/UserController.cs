@@ -71,7 +71,6 @@ namespace HermesChatApp.Controllers
             }
 
             user.PasswordHash = HashPassword(user.PasswordHash);
-            //user.LastOnline = DateTime.UtcNow;
             user.LastOnline = DateTime.Now;
             _context.Users.Add(user);
             await _context.SaveChangesAsync();
@@ -102,6 +101,7 @@ namespace HermesChatApp.Controllers
 
             return Json(new { users });
         }
+
         public IActionResult Settings()
         {
             var username = HttpContext.Session.GetString("Username");
@@ -111,7 +111,8 @@ namespace HermesChatApp.Controllers
             }
             return View();
         }
-        // Action to get current user info(used by Settings page to populate form)
+
+        // Action to get current user info (used by Settings page to populate form)
         [HttpGet]
         public async Task<IActionResult> GetUserInfo()
         {
@@ -219,6 +220,7 @@ namespace HermesChatApp.Controllers
 
             return RedirectToAction("Settings");
         }
+
         private bool IsValidEmail(string email)
         {
             if (string.IsNullOrWhiteSpace(email))
@@ -234,6 +236,7 @@ namespace HermesChatApp.Controllers
                 return false;
             }
         }
+
         private string HashPassword(string password)
         {
             using var sha256 = SHA256.Create();

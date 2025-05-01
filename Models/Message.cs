@@ -13,5 +13,7 @@
         public User Receiver { get; set; }
         public bool IsRead { get; set; } = false;
         public bool IsPinned { get; set; } = false;
+        public bool IsSeen { get; set; } = false; // Thêm trường IsSeen, mặc định là false
+        public long FileSize { get; set; }
     }
 }

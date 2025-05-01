@@ -162,4 +162,4 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 
     confirmPassword.addEventListener('keyup', checkPasswordsMatch);
-}
+});

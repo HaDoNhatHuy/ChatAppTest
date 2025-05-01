@@ -12,6 +12,35 @@ let typingTimeout = null;
 let oldestMessageId = null;
 let isLoadingMessages = false;
 let friendsList = [];
+let mediaRecorder = null;
+let audioChunks = [];
+
+// Hàm formatRecordingTime được định nghĩa ở phạm vi toàn cục
+function formatRecordingTime(seconds) {
+    if (!isFinite(seconds) || seconds < 0) {
+        return "Error";
+    }
+    const mins = Math.floor(seconds / 60).toString().padStart(2, '0');
+    const secs = (seconds % 60).toString().padStart(2, '0');
+    return `${mins}:${secs}`;
+}
+
+// Thêm IntersectionObserver để phát hiện tin nhắn hiển thị trong viewport
+const observer = new IntersectionObserver((entries) => {
+    entries.forEach(entry => {
+        if (entry.isIntersecting) {
+            const messageElement = entry.target;
+            const messageId = parseInt(messageElement.dataset.messageId);
+            const isReceiver = messageElement.classList.contains("received");
+
+            if (isReceiver && messageElement.dataset.seen === "false") {
+                connection.invoke("MarkMessageAsSeen", messageId, currentUser).catch(err => {
+                    console.error("Error marking message as seen:", err);
+                });
+            }
+        }
+    });
+}, { threshold: 0.5 });
 
 document.addEventListener("DOMContentLoaded", async () => {
     console.log("DOM loaded, initializing chat...");
@@ -68,6 +97,144 @@ document.addEventListener("DOMContentLoaded", async () => {
             scrollToBottomBtn.classList.remove("active");
         }
     });
+
+    // Tích hợp Emoji Picker
+    const emojiButton = document.getElementById("emojiButton");
+    const emojiPicker = document.getElementById("emojiPicker");
+    const messageInput = document.getElementById("messageInput");
+
+    emojiButton.addEventListener("click", () => {
+        const isVisible = emojiPicker.style.display === "block";
+        emojiPicker.style.display = isVisible ? "none" : "block";
+    });
+
+    emojiPicker.addEventListener("emoji-click", (event) => {
+        messageInput.value += event.detail.unicode;
+        emojiPicker.style.display = "none"; // Ẩn picker sau khi chọn
+    });
+
+    // Đóng picker khi click ra ngoài
+    document.addEventListener("click", (event) => {
+        if (
+            !emojiPicker.contains(event.target) &&
+            !emojiButton.contains(event.target)
+        ) {
+            emojiPicker.style.display = "none";
+        }
+    });
+
+    // Tích hợp Voice Message
+    const voiceButton = document.getElementById("voiceButton");
+    const recordingTimerDisplay = document.getElementById("recordingTimerDisplay");
+    let isRecording = false;
+    let recordingSeconds = 0;
+    let recordingTimer = null;
+
+    voiceButton.addEventListener("click", async () => {
+        if (!isRecording) {
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                mediaRecorder = new MediaRecorder(stream, { mimeType: 'audio/webm' });
+                audioChunks = [];
+
+                mediaRecorder.ondataavailable = (event) => {
+                    audioChunks.push(event.data);
+                };
+
+                mediaRecorder.onstop = async () => {
+                    clearInterval(recordingTimer);
+                    recordingSeconds = 0;
+                    recordingTimerDisplay.style.display = "none";
+                    voiceButton.parentElement.classList.remove('recording-active');
+
+                    if (audioChunks.length > 0) {
+                        // Chuyển đổi audio/webm sang audio/mp3 bằng lamejs
+                        const audioBlob = new Blob(audioChunks, { type: "audio/webm" });
+                        const arrayBuffer = await audioBlob.arrayBuffer();
+                        const audioContext = new AudioContext();
+                        const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
+
+                        const wav = audioBuffer.getChannelData(0); // Lấy dữ liệu âm thanh (mono channel)
+                        const mp3Encoder = new lamejs.Mp3Encoder(1, audioBuffer.sampleRate, 128); // Mono, 128kbps
+                        const mp3Data = [];
+                        const samples = new Int16Array(wav.length);
+                        for (let i = 0; i < wav.length; i++) {
+                            samples[i] = wav[i] * 32767; // Chuyển đổi sang 16-bit PCM
+                        }
+                        const mp3Buffer = mp3Encoder.encodeBuffer(samples);
+                        const endBuffer = mp3Encoder.flush();
+                        mp3Data.push(mp3Buffer);
+                        mp3Data.push(endBuffer);
+
+                        const mp3Blob = new Blob(mp3Data, { type: 'audio/mp3' });
+                        const fileSize = mp3Blob.size; // Lấy kích thước file tại client
+                        const formData = new FormData();
+                        formData.append("file", mp3Blob, "voice-message.mp3");
+
+                        voiceButton.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+
+                        const response = await fetch("/api/upload", {
+                            method: "POST",
+                            body: formData
+                        });
+
+                        const data = await response.json();
+                        if (data.fileUrl && currentFriend) {
+                            connection.invoke("SendFileMessage", currentUser, currentFriend, data.fileUrl, "Voice", fileSize);
+                        }
+
+                        voiceButton.innerHTML = '<i class="fas fa-microphone"></i>';
+                    }
+
+                    stream.getTracks().forEach(track => track.stop());
+                };
+
+                mediaRecorder.start();
+                recordingSeconds = 0;
+                recordingTimerDisplay.style.display = "inline";
+                recordingTimerDisplay.innerHTML = `<i class="fas fa-circle"></i> ${formatRecordingTime(recordingSeconds)}`;
+                voiceButton.parentElement.classList.add('recording-active');
+
+                recordingTimer = setInterval(() => {
+                    recordingSeconds++;
+                    recordingTimerDisplay.innerHTML = `<i class="fas fa-circle"></i> ${formatRecordingTime(recordingSeconds)}`;
+                    if (recordingSeconds >= 115) {
+                        recordingTimerDisplay.style.color = '#ff3b30';
+                    }
+                }, 1000);
+
+                setTimeout(() => {
+                    if (isRecording) {
+                        mediaRecorder.stop();
+                        isRecording = false;
+                        voiceButton.innerHTML = '<i class="fas fa-microphone"></i>';
+                        voiceButton.title = "Record Voice Message";
+                        voiceButton.parentElement.classList.remove('recording-active');
+                    }
+                }, 120000);
+
+                isRecording = true;
+                voiceButton.innerHTML = '<i class="fas fa-stop"></i>';
+                voiceButton.title = "Stop Recording";
+            } catch (err) {
+                console.error("Error accessing microphone:", err);
+                toastr.error("Unable to access microphone. Please check your permissions.");
+            }
+        } else {
+            clearInterval(recordingTimer);
+            recordingSeconds = 0;
+            recordingTimerDisplay.style.display = "none";
+            voiceButton.parentElement.classList.remove('recording-active');
+
+            if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+                mediaRecorder.stop();
+            }
+
+            isRecording = false;
+            voiceButton.innerHTML = '<i class="fas fa-microphone"></i>';
+            voiceButton.title = "Record Voice Message";
+        }
+    });
 });
 
 async function startConnection() {
@@ -104,8 +271,8 @@ connection.onclose(async (error) => {
     await startConnection();
 });
 
-connection.on("ReceiveMessage", (sender, message, receiver, messageType = "Text", fileUrl = null, isPinned = false, messageId, timestamp) => {
-    console.log(`Received message: Sender=${sender}, Receiver=${receiver}, Content=${message}, Type=${messageType}, ID=${messageId}, Timestamp=${timestamp}`);
+connection.on("ReceiveMessage", (sender, message, receiver, messageType = "Text", fileUrl = null, isPinned = false, messageId, timestamp, fileSize = 0) => {
+    console.log(`Received message: Sender=${sender}, Receiver=${receiver}, Content=${message}, Type=${messageType}, ID=${messageId}, Timestamp=${timestamp}, FileSize=${fileSize}`);
     if ((sender === currentFriend && receiver === currentUser) || (sender === currentUser && receiver === currentFriend)) {
         const messagesList = document.getElementById("messagesList");
         if (!messagesList) {
@@ -115,12 +282,12 @@ connection.on("ReceiveMessage", (sender, message, receiver, messageType = "Text"
 
         const lastMessage = messagesList.lastElementChild;
         const messageDate = new Date(timestamp);
-        const messageDateString = messageDate.toLocaleDateString();
+        const messageDateString = messageDate.toLocaleDateString('vi-VN');
 
         let lastMessageDateString = null;
         if (lastMessage && lastMessage.dataset.timestamp) {
             const lastMessageDate = new Date(lastMessage.dataset.timestamp);
-            lastMessageDateString = lastMessageDate.toLocaleDateString();
+            lastMessageDateString = lastMessageDate.toLocaleDateString('vi-VN');
         }
 
         if (!lastMessageDateString || messageDateString !== lastMessageDateString) {
@@ -134,27 +301,196 @@ connection.on("ReceiveMessage", (sender, message, receiver, messageType = "Text"
         li.className = `message ${sender === currentUser ? "sent" : "received"} ${isPinned ? "pinned" : ""}`;
         li.dataset.messageId = messageId;
         li.dataset.timestamp = timestamp;
+        li.dataset.seen = "false";
         let content = message;
+
+        const formatFileSize = (bytes) => {
+            if (bytes === 0) return '0 Bytes';
+            const k = 1024;
+            const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+        };
+
         if (messageType === "Image") {
-            content = `<img src="${fileUrl}" alt="Image" />`;
+            content = `
+                <div class="image-message-container">
+                    <img src="${fileUrl}" alt="Image" />
+                </div>
+            `;
         } else if (messageType === "File") {
-            content = `<a href="${fileUrl}" class="file-link" target="_blank">Download File</a>`;
+            const fileName = fileUrl.split('/').pop();
+            const fileExtension = fileName.split('.').pop().toLowerCase();
+            let fileTypeClass = 'other';
+            if (['doc', 'docx'].includes(fileExtension)) fileTypeClass = 'document';
+            else if (['xls', 'xlsx'].includes(fileExtension)) fileTypeClass = 'spreadsheet';
+            else if (['ppt', 'pptx'].includes(fileExtension)) fileTypeClass = 'presentation';
+            else if (fileExtension === 'pdf') fileTypeClass = 'pdf';
+            else if (['zip', 'rar'].includes(fileExtension)) fileTypeClass = 'archive';
+            else if (['js', 'html', 'css', 'py'].includes(fileExtension)) fileTypeClass = 'code';
+
+            content = `
+                <div class="file-message-container">
+                    <div class="file-icon ${fileTypeClass}">
+                        <i class="fas fa-file"></i>
+                        <span class="file-extension">${fileExtension}</span>
+                    </div>
+                    <div class="file-details">
+                        <div class="file-name">${fileName}</div>
+                        <div class="file-meta">
+                            <span class="file-size">${formatFileSize(fileSize)}</span>
+                            <a href="${fileUrl}" class="file-link" target="_blank">Download</a>
+                        </div>
+                    </div>
+                </div>
+            `;
+        } else if (messageType === "Voice") {
+            content = `
+                <div class="voice-message-container">
+                    <div class="voice-controls">
+                        <i class="fas fa-play voice-message-icon" style="padding:10.5px;"></i>
+                        <span class="voice-message-duration">0:00</span>
+                    </div>
+                    <div class="voice-message-content">
+                        <div class="voice-message-waveform">
+                            <div class="voice-waveform-bars">
+                                <div class="waveform-bar"></div>
+                                <div class="waveform-bar"></div>
+                                <div class="waveform-bar"></div>
+                                <div class="waveform-bar"></div>
+                                <div class="waveform-bar"></div>
+                                <div class="waveform-bar"></div>
+                                <div class="waveform-bar"></div>
+                                <div class="waveform-bar"></div>
+                                <div class="waveform-bar"></div>
+                            </div>
+                        </div>
+                        <div class="voice-progress">
+                            <div class="voice-progress-bar"></div>
+                        </div>
+                    </div>
+                    <audio class="voice-audio" style="display: none;">
+                        <source src="${fileUrl}" type="audio/mp3">
+                        Your browser does not support the audio element.
+                    </audio>
+                </div>
+            `;
         }
+
         li.innerHTML = `
             <img src="/images/avatars/${sender}.jpg" class="avatar" onerror="this.src='/images/avatars/default.jpg'" />
             <div class="content">
                 <span>${content}</span>
                 <small>${messageDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</small>
+                ${sender === currentUser ? `<small class="seen-indicator text-success" style="display: none;" title="Seen"><i class="fas fa-check-double"></i></small>` : ""}
                 <button class="pin-button btn btn-sm btn-outline-secondary">${isPinned ? "Unpin" : "Pin"}</button>
             </div>
         `;
         messagesList.appendChild(li);
+        observer.observe(li);
+
+        if (messageType === "Voice") {
+            const container = li.querySelector('.voice-message-container');
+            const audio = container.querySelector('.voice-audio');
+            const playButton = container.querySelector('.voice-message-icon');
+            const durationSpan = container.querySelector('.voice-message-duration');
+            const waveformBars = container.querySelector('.voice-waveform-bars');
+            const progressBar = container.querySelector('.voice-progress-bar');
+
+            // Thêm kiểm tra lỗi khi tải file âm thanh
+            audio.onerror = () => {
+                console.error(`Failed to load audio from ${fileUrl}`);
+                durationSpan.textContent = "Error";
+                durationSpan.style.color = "red";
+            };
+
+            // Tải file âm thanh và lấy thời lượng
+            audio.onloadedmetadata = () => {
+                const duration = audio.duration;
+                console.log(`Audio duration for ${fileUrl}: ${duration} seconds`);
+                if (!isFinite(duration) || duration <= 0) {
+                    durationSpan.textContent = "Error";
+                    durationSpan.style.color = "red";
+                } else {
+                    durationSpan.textContent = formatRecordingTime(Math.round(duration));
+                }
+            };
+
+            // Buộc tải lại file âm thanh để đảm bảo sự kiện onloadedmetadata được gọi
+            audio.load();
+
+            playButton.addEventListener('click', () => {
+                if (audio.paused) {
+                    audio.play().catch(err => {
+                        console.error(`Error playing audio from ${fileUrl}:`, err);
+                        toastr.error("Failed to play audio. Please check the file.");
+                    });
+                    playButton.classList.remove('fa-play');
+                    playButton.classList.add('fa-pause');
+                    container.classList.add('playing');
+                    waveformBars.classList.add('active');
+                } else {
+                    audio.pause();
+                    playButton.classList.remove('fa-pause');
+                    playButton.classList.add('fa-play');
+                    container.classList.remove('playing');
+                    waveformBars.classList.remove('active');
+                }
+            });
+
+            audio.ontimeupdate = () => {
+                if (isFinite(audio.duration) && audio.duration > 0) {
+                    const progress = (audio.currentTime / audio.duration) * 100;
+                    progressBar.style.width = `${progress}%`;
+                }
+            };
+
+            audio.onended = () => {
+                playButton.classList.remove('fa-pause');
+                playButton.classList.add('fa-play');
+                container.classList.remove('playing');
+                waveformBars.classList.remove('active');
+                progressBar.style.width = '0%';
+            };
+        }
 
         if (!oldestMessageId || messageId < oldestMessageId) {
             oldestMessageId = messageId;
         }
 
-        // Cuộn xuống tin nhắn cuối cùng
+        if (messageType === "Image") {
+            const img = li.querySelector('.image-message-container img');
+            img.addEventListener('click', () => {
+                const lightbox = document.createElement('div');
+                lightbox.className = 'image-lightbox';
+                lightbox.innerHTML = `
+                    <div class="lightbox-content">
+                        <img src="${fileUrl}" alt="Image" class="lightbox-image" />
+                        <span class="lightbox-close">×</span>
+                    </div>
+                `;
+                document.body.appendChild(lightbox);
+
+                setTimeout(() => {
+                    lightbox.classList.add('active');
+                }, 10);
+
+                const closeLightbox = () => {
+                    lightbox.classList.remove('active');
+                    setTimeout(() => {
+                        lightbox.remove();
+                    }, 300);
+                };
+
+                lightbox.querySelector('.lightbox-close').addEventListener('click', closeLightbox);
+                lightbox.addEventListener('click', (e) => {
+                    if (e.target === lightbox) {
+                        closeLightbox();
+                    }
+                });
+            });
+        }
+
         const scrollToBottom = (retryCount = 0) => {
             setTimeout(() => {
                 const lastMessage = messagesList.lastElementChild;
@@ -186,7 +522,6 @@ connection.on("ReceiveMessage", (sender, message, receiver, messageType = "Text"
 
         scrollToBottom();
 
-        // Thêm sự kiện click cho tin nhắn để cuộn xuống dưới cùng
         li.addEventListener("click", () => {
             const lastMessage = messagesList.lastElementChild;
             if (lastMessage) {
@@ -215,7 +550,7 @@ connection.on("ReceiveMessage", (sender, message, receiver, messageType = "Text"
         if (!pendingMessages[sender]) {
             pendingMessages[sender] = [];
         }
-        pendingMessages[sender].push({ sender, message, receiver, messageType, fileUrl, isPinned, messageId, timestamp });
+        pendingMessages[sender].push({ sender, message, receiver, messageType, fileUrl, isPinned, messageId, timestamp, fileSize });
         localStorage.setItem("pendingMessages", JSON.stringify(pendingMessages));
     }
     connection.invoke("GetUnreadCounts", currentUser);
@@ -234,13 +569,13 @@ connection.on("ReceiveOlderMessages", (messages) => {
 
     messages.forEach(msg => {
         const messageDate = new Date(msg.Timestamp);
-        const messageDateString = messageDate.toLocaleDateString();
+        const messageDateString = messageDate.toLocaleDateString('vi-VN');
 
         const firstMessage = messagesList.firstElementChild;
         let firstMessageDateString = null;
         if (firstMessage && firstMessage.dataset.timestamp) {
             const firstMessageDate = new Date(firstMessage.dataset.timestamp);
-            firstMessageDateString = firstMessageDate.toLocaleDateString();
+            firstMessageDateString = firstMessageDate.toLocaleDateString('vi-VN');
         }
 
         if (!firstMessageDateString || messageDateString !== firstMessageDateString) {
@@ -251,30 +586,199 @@ connection.on("ReceiveOlderMessages", (messages) => {
         }
 
         const li = document.createElement("li");
-        li.className = `message ${msg.SenderUsername === currentUser ? "sent" : "received"} ${msg.IsPinned ? "pinned" : ""}`;
+        li.className = `message ${msg.Sender === currentUser ? "sent" : "received"} ${msg.IsPinned ? "pinned" : ""}`;
         li.dataset.messageId = msg.Id;
         li.dataset.timestamp = msg.Timestamp;
+        li.dataset.seen = msg.IsSeen.toString();
         let content = msg.Content;
+
+        const formatFileSize = (bytes) => {
+            if (bytes === 0) return '0 Bytes';
+            const k = 1024;
+            const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+        };
+
         if (msg.MessageType === "Image") {
-            content = `<img src="${msg.FileUrl}" alt="Image" />`;
+            content = `
+                <div class="image-message-container">
+                    <img src="${msg.FileUrl}" alt="Image" />
+                </div>
+            `;
         } else if (msg.MessageType === "File") {
-            content = `<a href="${msg.FileUrl}" class="file-link" target="_blank">Download File</a>`;
+            const fileName = msg.FileUrl.split('/').pop();
+            const fileExtension = fileName.split('.').pop().toLowerCase();
+            let fileTypeClass = 'other';
+            if (['doc', 'docx'].includes(fileExtension)) fileTypeClass = 'document';
+            else if (['xls', 'xlsx'].includes(fileExtension)) fileTypeClass = 'spreadsheet';
+            else if (['ppt', 'pptx'].includes(fileExtension)) fileTypeClass = 'presentation';
+            else if (fileExtension === 'pdf') fileTypeClass = 'pdf';
+            else if (['zip', 'rar'].includes(fileExtension)) fileTypeClass = 'archive';
+            else if (['js', 'html', 'css', 'py'].includes(fileExtension)) fileTypeClass = 'code';
+
+            content = `
+                <div class="file-message-container">
+                    <div class="file-icon ${fileTypeClass}">
+                        <i class="fas fa-file"></i>
+                        <span class="file-extension">${fileExtension}</span>
+                    </div>
+                    <div class="file-details">
+                        <div class="file-name">${fileName}</div>
+                        <div class="file-meta">
+                            <span class="file-size">${formatFileSize(msg.FileSize || 0)}</span>
+                            <a href="${msg.FileUrl}" class="file-link" target="_blank">Download</a>
+                        </div>
+                    </div>
+                </div>
+            `;
+        } else if (msg.MessageType === "Voice") {
+            content = `
+                <div class="voice-message-container">
+                    <div class="voice-controls">
+                        <i class="fas fa-play voice-message-icon" style="padding:10.5px;"></i>
+                        <span class="voice-message-duration">0:00</span>
+                    </div>
+                    <div class="voice-message-content">
+                        <div class="voice-message-waveform">
+                            <div class="voice-waveform-bars">
+                                <div class="waveform-bar"></div>
+                                <div class="waveform-bar"></div>
+                                <div class="waveform-bar"></div>
+                                <div class="waveform-bar"></div>
+                                <div class="waveform-bar"></div>
+                                <div class="waveform-bar"></div>
+                                <div class="waveform-bar"></div>
+                                <div class="waveform-bar"></div>
+                                <div class="waveform-bar"></div>
+                            </div>
+                        </div>
+                        <div class="voice-progress">
+                            <div class="voice-progress-bar"></div>
+                        </div>
+                    </div>
+                    <audio class="voice-audio" style="display: none;">
+                        <source src="${msg.FileUrl}" type="audio/mp3">
+                        Your browser does not support the audio element.
+                    </audio>
+                </div>
+            `;
         }
+
         li.innerHTML = `
-            <img src="/images/avatars/${msg.SenderUsername}.jpg" class="avatar" onerror="this.src='/images/avatars/default.jpg'" />
+            <img src="/images/avatars/${msg.Sender}.jpg" class="avatar" onerror="this.src='/images/avatars/default.jpg'" />
             <div class="content">
                 <span>${content}</span>
                 <small>${messageDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</small>
+                ${msg.Sender === currentUser ? `<small class="seen-indicator text-success" style="display: ${msg.IsSeen ? 'inline' : 'none'};" title="Seen"><i class="fas fa-check-double"></i></small>` : ""}
                 <button class="pin-button btn btn-sm btn-outline-secondary">${msg.IsPinned ? "Unpin" : "Pin"}</button>
             </div>
         `;
         messagesList.insertBefore(li, messagesList.firstChild);
+        observer.observe(li);
+
+        if (msg.MessageType === "Voice") {
+            const container = li.querySelector('.voice-message-container');
+            const audio = container.querySelector('.voice-audio');
+            const playButton = container.querySelector('.voice-message-icon');
+            const durationSpan = container.querySelector('.voice-message-duration');
+            const waveformBars = container.querySelector('.voice-waveform-bars');
+            const progressBar = container.querySelector('.voice-progress-bar');
+
+            // Thêm kiểm tra lỗi khi tải file âm thanh
+            audio.onerror = () => {
+                console.error(`Failed to load audio from ${msg.FileUrl}`);
+                durationSpan.textContent = "Error";
+                durationSpan.style.color = "red";
+            };
+
+            // Tải file âm thanh và lấy thời lượng
+            audio.onloadedmetadata = () => {
+                const duration = audio.duration;
+                console.log(`Audio duration for ${msg.FileUrl}: ${duration} seconds`);
+                if (!isFinite(duration) || duration <= 0) {
+                    durationSpan.textContent = "Error";
+                    durationSpan.style.color = "red";
+                } else {
+                    durationSpan.textContent = formatRecordingTime(Math.round(duration));
+                }
+            };
+
+            // Buộc tải lại file âm thanh để đảm bảo sự kiện onloadedmetadata được gọi
+            audio.load();
+
+            playButton.addEventListener('click', () => {
+                if (audio.paused) {
+                    audio.play().catch(err => {
+                        console.error(`Error playing audio from ${msg.FileUrl}:`, err);
+                        toastr.error("Failed to play audio. Please check the file.");
+                    });
+                    playButton.classList.remove('fa-play');
+                    playButton.classList.add('fa-pause');
+                    container.classList.add('playing');
+                    waveformBars.classList.add('active');
+                } else {
+                    audio.pause();
+                    playButton.classList.remove('fa-pause');
+                    playButton.classList.add('fa-play');
+                    container.classList.remove('playing');
+                    waveformBars.classList.remove('active');
+                }
+            });
+
+            audio.ontimeupdate = () => {
+                if (isFinite(audio.duration) && audio.duration > 0) {
+                    const progress = (audio.currentTime / audio.duration) * 100;
+                    progressBar.style.width = `${progress}%`;
+                }
+            };
+
+            audio.onended = () => {
+                playButton.classList.remove('fa-pause');
+                playButton.classList.add('fa-play');
+                container.classList.remove('playing');
+                waveformBars.classList.remove('active');
+                progressBar.style.width = '0%';
+            };
+        }
 
         if (!oldestMessageId || msg.Id < oldestMessageId) {
             oldestMessageId = msg.Id;
         }
 
-        // Thêm sự kiện click cho tin nhắn để cuộn xuống dưới cùng
+        if (msg.MessageType === "Image") {
+            const img = li.querySelector('.image-message-container img');
+            img.addEventListener('click', () => {
+                const lightbox = document.createElement('div');
+                lightbox.className = 'image-lightbox';
+                lightbox.innerHTML = `
+                    <div class="lightbox-content">
+                        <img src="${msg.FileUrl}" alt="Image" class="lightbox-image" />
+                        <span class="lightbox-close">×</span>
+                    </div>
+                `;
+                document.body.appendChild(lightbox);
+
+                setTimeout(() => {
+                    lightbox.classList.add('active');
+                }, 10);
+
+                const closeLightbox = () => {
+                    lightbox.classList.remove('active');
+                    setTimeout(() => {
+                        lightbox.remove();
+                    }, 300);
+                };
+
+                lightbox.querySelector('.lightbox-close').addEventListener('click', closeLightbox);
+                lightbox.addEventListener('click', (e) => {
+                    if (e.target === lightbox) {
+                        closeLightbox();
+                    }
+                });
+            });
+        }
+
         li.addEventListener("click", () => {
             const lastMessage = messagesList.lastElementChild;
             if (lastMessage) {
@@ -297,6 +801,25 @@ connection.on("ReceiveOlderMessages", (messages) => {
     });
 
     messagesList.scrollTop = messagesList.scrollHeight - currentScrollHeight;
+});
+
+// Thêm sự kiện MessageSeen để cập nhật giao diện
+connection.on("MessageSeen", (messageId) => {
+    console.log(`Received MessageSeen for message ${messageId}`);
+    const messageElement = document.querySelector(`.message[data-message-id="${messageId}"]`);
+    if (messageElement) {
+        console.log(`Updating seen status for message ${messageId}`);
+        messageElement.dataset.seen = "true";
+        const seenIndicator = messageElement.querySelector(".seen-indicator");
+        if (seenIndicator) {
+            seenIndicator.style.display = "inline";
+            console.log(`Displayed seen indicator for message ${messageId}`);
+        } else {
+            console.error(`Seen indicator not found for message ${messageId}`);
+        }
+    } else {
+        console.error(`Message element with ID ${messageId} not found`);
+    }
 });
 
 connection.on("ReceiveNewMessageNotification", (sender) => {
@@ -345,6 +868,8 @@ connection.on("ReceiveNewMessageNotification", (sender) => {
                             }, 300);
                         };
                         scrollToBottom();
+                        const messageElements = messagesList.querySelectorAll(".message");
+                        messageElements.forEach(msg => observer.observe(msg));
                     });
                 };
             };
@@ -436,6 +961,13 @@ connection.on("ReceiveUserStatus", (username, isOnline) => {
             } else {
                 connection.invoke("GetLastOnline", currentUser, username).catch(err => console.error("Error getting last online:", err));
             }
+
+            if (username === currentFriend) {
+                const statusDot = document.getElementById("chatUserStatus");
+                if (statusDot) {
+                    statusDot.className = `status-dot ${isOnline ? "online" : "offline"}`;
+                }
+            }
             break;
         }
     }
@@ -461,7 +993,23 @@ connection.on("ReceiveFriends", (friends, friendStatuses) => {
         li.onclick = () => {
             currentFriend = friend;
             localStorage.setItem("currentFriend", currentFriend);
+
             document.getElementById("chat-intro").textContent = `Chat with ${friend}`;
+
+            const avatarContainer = document.getElementById("chatUserAvatarContainer");
+            const avatarImg = document.getElementById("chatUserAvatar");
+            const statusDot = document.getElementById("chatUserStatus");
+
+            avatarContainer.classList.remove("d-none");
+
+            avatarImg.src = `/images/avatars/${friend}.jpg`;
+            avatarImg.onerror = () => {
+                avatarImg.src = '/images/avatars/default.jpg';
+            };
+
+            const isOnline = friendStatuses[friend];
+            statusDot.className = `status-dot ${isOnline ? "online" : "offline"}`;
+
             document.getElementById("messagesList").innerHTML = "";
             oldestMessageId = null;
             const loadingSpinner = document.getElementById("loadingSpinner");
@@ -472,7 +1020,7 @@ connection.on("ReceiveFriends", (friends, friendStatuses) => {
             const pendingMessages = JSON.parse(localStorage.getItem("pendingMessages") || "{}");
             if (pendingMessages[friend]) {
                 pendingMessages[friend].forEach(msg => {
-                    connection.invoke("ReceiveMessage", msg.sender, msg.message, msg.receiver, msg.messageType, msg.fileUrl, msg.isPinned, msg.messageId, msg.timestamp);
+                    connection.invoke("ReceiveMessage", msg.sender, msg.message, msg.receiver, msg.messageType, msg.fileUrl, msg.isPinned, msg.messageId, msg.timestamp, msg.fileSize);
                 });
                 delete pendingMessages[friend];
                 localStorage.setItem("pendingMessages", JSON.stringify(pendingMessages));
@@ -501,6 +1049,9 @@ connection.on("ReceiveFriends", (friends, friendStatuses) => {
                     }, 300);
                 };
                 scrollToBottom();
+
+                const messageElements = messagesList.querySelectorAll(".message");
+                messageElements.forEach(msg => observer.observe(msg));
             });
         };
         friendList.appendChild(li);
@@ -586,14 +1137,20 @@ connection.on("ReceiveLastOnline", (friend, lastOnline) => {
 function updateLastOfflineTime(element, lastOnline) {
     const now = new Date();
     console.log(`Current time: ${now}, LastOnline: ${lastOnline}`);
-    const diff = Math.round((now - lastOnline) / 60000);
+    const diff = Math.round((now - lastOnline) / 60000); // diff in minutes
     if (diff < 1) {
         element.textContent = "Offline just now";
     } else if (diff < 60) {
         element.textContent = `Offline ${diff} mins ago`;
-    } else {
+    } else if (diff < 1440) {
         const hours = Math.round(diff / 60);
         element.textContent = `Offline ${hours} hours ago`;
+    } else if (diff < 10080) {
+        const days = Math.round(diff / 1440);
+        element.textContent = `Offline ${days} days ago`;
+    } else {
+        const weeks = Math.round(diff / 10080);
+        element.textContent = `Offline ${weeks} weeks ago`;
     }
 }
 
@@ -629,7 +1186,7 @@ document.getElementById("searchUser").addEventListener("input", async () => {
                     const pendingMessages = JSON.parse(localStorage.getItem("pendingMessages") || "{}");
                     if (pendingMessages[user]) {
                         pendingMessages[user].forEach(msg => {
-                            connection.invoke("ReceiveMessage", msg.sender, msg.message, msg.receiver, msg.messageType, msg.fileUrl, msg.isPinned, msg.messageId, msg.timestamp);
+                            connection.invoke("ReceiveMessage", msg.sender, msg.message, msg.receiver, msg.messageType, msg.fileUrl, msg.isPinned, msg.messageId, msg.timestamp, msg.fileSize);
                         });
                         delete pendingMessages[user];
                         localStorage.setItem("pendingMessages", JSON.stringify(pendingMessages));
@@ -658,6 +1215,9 @@ document.getElementById("searchUser").addEventListener("input", async () => {
                             }, 300);
                         };
                         scrollToBottom();
+
+                        const messageElements = messagesList.querySelectorAll(".message");
+                        messageElements.forEach(msg => observer.observe(msg));
                     });
                 };
             } else {
@@ -703,19 +1263,6 @@ document.getElementById("messageInput").addEventListener("input", () => {
     }
 });
 
-document.getElementById("emojiButton").addEventListener("click", () => {
-    const picker = document.getElementById("emojiPicker");
-    picker.style.display = picker.style.display === "block" ? "none" : "block";
-});
-
-document.querySelectorAll(".emoji").forEach(emoji => {
-    emoji.addEventListener("click", () => {
-        const messageInput = document.getElementById("messageInput");
-        messageInput.value += emoji.dataset.emoji;
-        document.getElementById("emojiPicker").style.display = "none";
-    });
-});
-
 document.getElementById("fileButton").addEventListener("click", () => {
     document.getElementById("fileInput").click();
 });
@@ -725,6 +1272,7 @@ document.getElementById("fileInput").addEventListener("change", async () => {
     if (file && currentFriend) {
         const formData = new FormData();
         formData.append("file", file);
+        const fileSize = file.size; // Lấy kích thước file tại client
         const response = await fetch("/api/upload", {
             method: "POST",
             body: formData
@@ -732,7 +1280,7 @@ document.getElementById("fileInput").addEventListener("change", async () => {
         const data = await response.json();
         if (data.fileUrl) {
             const messageType = file.type.startsWith("image/") ? "Image" : "File";
-            connection.invoke("SendFileMessage", currentUser, currentFriend, data.fileUrl, messageType);
+            connection.invoke("SendFileMessage", currentUser, currentFriend, data.fileUrl, messageType, fileSize);
         }
     }
 });

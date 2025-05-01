@@ -1,19 +1,30 @@
 ﻿@{
     ViewData["Title"] = "Chat";
 }
+
 @section Css {
     <link href="/css/site.css" rel="stylesheet" />
+    @* <link href="/css/chatStyle.css" rel="stylesheet" /> *@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" />
 }
+
 @section Scripts
 {
     <script src="https://cdnjs.cloudflare.com/ajax/libs/microsoft-signalr/8.0.7/signalr.min.js"></script>
     <script src="https://unpkg.com/simple-peer@9.11.1/simplepeer.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/lamejs@1.2.1/lame.min.js"></script>
+    <!-- Emoji Picker Element -->
+    <script type="module" src="https://cdn.jsdelivr.net/npm/emoji-picker-element@1/index.js"></script>
+    <script type="module">
+        import { polyfillCountryFlagEmojis } from 'https://cdn.skypack.dev/country-flag-emoji-polyfill@v0.1.1';
+        polyfillCountryFlagEmojis('Twemoji Mozilla');
+    </script>
     <script>
         const currentUser = "@ViewBag.Username";
-    </script>
+    </script>    
     <script src="~/js/chat.js"></script>
 }
+
 <div class="chat-container glass-effect">
     <!-- Sidebar Left: Friends -->
     <div class="sidebar left-sidebar">
@@ -48,9 +59,9 @@
     <div class="chat-area">
         <div class="chat-header p-3 border-bottom d-flex align-items-center">
             <div class="chat-user-info d-flex align-items-center flex-grow-1">
-                <div class="user-avatar me-2">
-                    <img id="chatUserAvatar" src="/images/avatars/Mary.jpg" class="rounded-circle" alt="User" width="32" height="32">
-                    <span id="chatUserStatus" class="status-dot online"></span>
+                <div class="user-avatar me-2 d-none" id="chatUserAvatarContainer">
+                    <img id="chatUserAvatar" src="" class="rounded-circle" alt="User" width="32" height="32">
+                    <span id="chatUserStatus" class="status-dot"></span>
                 </div>
                 <h5 class="mb-0" id="chat-intro">Select a friend to start chatting</h5>
             </div>
@@ -63,31 +74,30 @@
         <div class="messages p-3 position-relative">
             <div id="loadingSpinner" class="loading-spinner"></div>
             <ul id="messagesList" class="messages-list"></ul>
-            
         </div>
         <button id="scrollToBottomBtn" class="btn btn-sm btn-primary scroll-to-bottom">
             <i class="fas fa-arrow-down"></i>
         </button>
         <div id="typingIndicator" class="typing-indicator">Typing...</div>
         <div class="input-area p-3 border-top d-flex align-items-center">
-            <div class="message-input-wrapper d-flex align-items-center w-100">
+            <div class="message-input-wrapper d-flex align-items-center w-100 position-relative">
                 <button id="emojiButton" class="input-action-button" title="Add Emoji">
                     <i class="fas fa-smile"></i>
                 </button>
-                <div class="emoji-picker" id="emojiPicker" style="display: none;">
-                    <span class="emoji" data-emoji="😊">😊</span>
-                    <span class="emoji" data-emoji="😂">😂</span>
-                    <span class="emoji" data-emoji="❤️">❤️</span>
-                    <span class="emoji" data-emoji="👍">👍</span>
-                    <span class="emoji" data-emoji="😢">😢</span>
-                    <span class="emoji" data-emoji="😡">😡</span>
-                    <span class="emoji" data-emoji="🎉">🎉</span>
-                    <span class="emoji" data-emoji="🚀">🚀</span>
-                </div>
+                <!-- Sử dụng emoji-picker-element thay vì danh sách emoji cố định -->
+                <emoji-picker id="emojiPicker" style="display: none; position: absolute; bottom: 60px; left: 10px; z-index: 1000;"></emoji-picker>
                 <input type="file" id="fileInput" class="d-none" accept="image/*,.pdf,.doc,.docx" />
                 <button id="fileButton" class="input-action-button" title="Attach File">
                     <i class="fas fa-paperclip"></i>
                 </button>
+                @* <button id="voiceButton" class="input-action-button" title="Record Voice Message">
+                    <i class="fas fa-microphone"></i>
+                </button>
+                <span id="recordingTimerDisplay" style="display: none; position: absolute; left: 100px; top: 50%; transform: translateY(-50%); color: #007bff;"></span> *@
+                <button id="voiceButton" class="input-action-button" title="Record Voice Message">
+                    <i class="fas fa-microphone"></i>
+                </button>
+                <span id="recordingTimerDisplay" style="display: none;"></span>
                 <textarea id="messageInput" class="form-control rounded-pill message-textarea" placeholder="Type a message..." rows="1"></textarea>
                 <button id="sendButton" class="input-action-button send-button">
                     <i class="fas fa-paper-plane"></i>

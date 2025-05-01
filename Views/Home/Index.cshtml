@@ -11,7 +11,7 @@
     <!-- Main Content -->
     <div class="container">
         <div class="row align-items-center min-vh-80">
-            <div class="col-lg-6 hero-content text-white">
+            <div class="col-lg-6 c text-white">
                 <h1 class="hero-title fw-bold mb-4">Connect Beyond <span class="text-gradient">Messages</span></h1>
                 <p class="hero-description mb-4">
                     Experience communication reimagined with HermesChat. Share moments, connect with friends, and enjoy seamless real-time conversations in a secure environment.
@@ -42,7 +42,7 @@
                         <div class="bubble user-bubble shadow">
                             <div class="bubble-content">
                                 <div class="bubble-avatar">
-                                    <img src="/images/avatars/Marina.jpg" alt="User avatar" class="rounded-circle" />
+                                    <img src="/images/avatars/Mary.jpg" alt="User avatar" class="rounded-circle avt-user" />
                                 </div>
                                 <div class="bubble-text">
                                     <p>Hey there! How's everything going?</p>
@@ -53,7 +53,7 @@
                         <div class="bubble friend-bubble shadow">
                             <div class="bubble-content">
                                 <div class="bubble-avatar">
-                                    <img src="/images/avatars/Peter.jpg" alt="Friend avatar" class="rounded-circle" />
+                                    <img src="/images/avatars/Ben.jpg" alt="Friend avatar" class="rounded-circle avt-user" />
                                 </div>
                                 <div class="bubble-text">
                                     <p>All good! Just checking out this new chat app. The interface is amazing!</p>
@@ -64,7 +64,7 @@
                         <div class="bubble user-bubble shadow">
                             <div class="bubble-content">
                                 <div class="bubble-avatar">
-                                    <img src="/images/avatars/John.jpg" alt="User avatar" class="rounded-circle" />
+                                    <img src="/images/avatars/Cristiana.jpg" alt="User avatar" class="rounded-circle avt-user" />
                                 </div>
                                 <div class="bubble-text">
                                     <p>I know right? So smooth and intuitive!</p>
@@ -163,7 +163,7 @@
                     </div>
                     <div class="testimonial-user d-flex align-items-center mt-3">
                         <div class="testimonial-avatar">
-                            <img src="/images/avatars/Mary.jpg" alt="User avatar" class="rounded-circle" />
+                            <img src="/images/avatars/John.jpg" alt="User avatar" class="rounded-circle" />
                         </div>
                         <div class="testimonial-info ms-3">
                             <h5 class="testimonial-name mb-0">Sophia Chen</h5>
@@ -187,7 +187,7 @@
                     </div>
                     <div class="testimonial-user d-flex align-items-center mt-3">
                         <div class="testimonial-avatar">
-                            <img src="/images/avatars/Ben.jpg" alt="User avatar" class="rounded-circle" />
+                            <img src="/images/avatars/Laura.jpg" alt="User avatar" class="rounded-circle" />
                         </div>
                         <div class="testimonial-info ms-3">
                             <h5 class="testimonial-name mb-0">Marcus Johnson</h5>
@@ -211,7 +211,7 @@
                     </div>
                     <div class="testimonial-user d-flex align-items-center mt-3">
                         <div class="testimonial-avatar">
-                            <img src="/images/avatars/Cristiana.jpg" alt="User avatar" class="rounded-circle" />
+                            <img src="/images/avatars/Peter.jpg" alt="User avatar" class="rounded-circle" />
                         </div>
                         <div class="testimonial-info ms-3">
                             <h5 class="testimonial-name mb-0">Elena Rodriguez</h5>
@@ -306,21 +306,22 @@
 @section Css {
     <link href="/css/homeStyle.css" rel="stylesheet" />
 }
+@section Scripts{
+    <!-- Optional JavaScript for additional animations and interactions -->
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            // Add scroll animations for sections
+            const observer = new IntersectionObserver((entries) => {
+                entries.forEach(entry => {
+                    if (entry.isIntersecting) {
+                        entry.target.classList.add('animate__animated', 'animate__fadeInUp');
+                    }
+                });
+            }, { threshold: 0.1 });
 
-<!-- Optional JavaScript for additional animations and interactions -->
-<script>
-    document.addEventListener('DOMContentLoaded', function() {
-        // Add scroll animations for sections
-        const observer = new IntersectionObserver((entries) => {
-            entries.forEach(entry => {
-                if (entry.isIntersecting) {
-                    entry.target.classList.add('animate__animated', 'animate__fadeInUp');
-                }
+            document.querySelectorAll('.feature-card, .testimonial-card').forEach(el => {
+                observer.observe(el);
             });
-        }, { threshold: 0.1 });
-
-        document.querySelectorAll('.feature-card, .testimonial-card').forEach(el => {
-            observer.observe(el);
         });
-    });
-</script>
+    </script>
+}

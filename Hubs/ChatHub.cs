@@ -1,5 +1,6 @@
 ﻿using HermesChatApp.Data;
 using HermesChatApp.Models;
+using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.EntityFrameworkCore;
 using System.Collections.Concurrent;
@@ -133,7 +134,7 @@ namespace HermesChatApp.Hubs
             }
         }
 
-        public async Task SendFileMessage(string sender, string receiver, string fileUrl, string messageType)
+        public async Task SendFileMessage(string sender, string receiver, string fileUrl, string messageType, long fileSize)
         {
             try
             {
@@ -150,6 +151,7 @@ namespace HermesChatApp.Hubs
                     Content = "",
                     MessageType = messageType,
                     FileUrl = fileUrl,
+                    FileSize = fileSize, // Lưu fileSize vào model
                     SenderId = senderUser.Id,
                     ReceiverId = receiverUser.Id,
                     Timestamp = DateTime.Now,
@@ -162,11 +164,11 @@ namespace HermesChatApp.Hubs
                 var receiverConnectionId = _userConnections.GetValueOrDefault(receiver);
                 if (senderConnectionId != null)
                 {
-                    await Clients.Client(senderConnectionId).SendAsync("ReceiveMessage", sender, "", receiver, messageType, fileUrl, msg.IsPinned, msg.Id, msg.Timestamp.ToString("o"));
+                    await Clients.Client(senderConnectionId).SendAsync("ReceiveMessage", sender, "", receiver, messageType, fileUrl, msg.IsPinned, msg.Id, msg.Timestamp.ToString("o"), msg.FileSize);
                 }
                 if (receiverConnectionId != null)
                 {
-                    await Clients.Client(receiverConnectionId).SendAsync("ReceiveMessage", sender, "", receiver, messageType, fileUrl, msg.IsPinned, msg.Id, msg.Timestamp.ToString("o"));
+                    await Clients.Client(receiverConnectionId).SendAsync("ReceiveMessage", sender, "", receiver, messageType, fileUrl, msg.IsPinned, msg.Id, msg.Timestamp.ToString("o"), msg.FileSize);
                     await Clients.Client(receiverConnectionId).SendAsync("ReceiveNewMessageNotification", sender);
                 }
                 await GetUnreadCounts(receiver);
@@ -238,15 +240,16 @@ namespace HermesChatApp.Hubs
                     .Where(m =>
                         (m.SenderId == currentUserEntity.Id && m.ReceiverId == friendEntity.Id) ||
                         (m.SenderId == friendEntity.Id && m.ReceiverId == currentUserEntity.Id))
-                    .OrderByDescending(m => m.Timestamp) // Lấy 50 tin nhắn mới nhất
+                    .OrderByDescending(m => m.Timestamp)
                     .Take(50)
-                    .OrderBy(m => m.Timestamp) // Sắp xếp tăng dần để gửi tin nhắn cũ trước, mới sau
+                    .OrderBy(m => m.Timestamp)
                     .Select(m => new
                     {
                         m.Id,
                         m.Content,
                         m.MessageType,
                         m.FileUrl,
+                        m.FileSize, // Bao gồm FileSize
                         m.IsPinned,
                         m.Timestamp,
                         SenderUsername = m.Sender.Username,
@@ -254,10 +257,9 @@ namespace HermesChatApp.Hubs
                     })
                     .ToListAsync();
 
-                // Gửi danh sách tin nhắn cho client theo thứ tự tăng dần
                 foreach (var msg in messages)
                 {
-                    await Clients.Caller.SendAsync("ReceiveMessage", msg.SenderUsername, msg.Content, msg.ReceiverUsername, msg.MessageType, msg.FileUrl, msg.IsPinned, msg.Id, msg.Timestamp.ToString("o"));
+                    await Clients.Caller.SendAsync("ReceiveMessage", msg.SenderUsername, msg.Content, msg.ReceiverUsername, msg.MessageType, msg.FileUrl, msg.IsPinned, msg.Id, msg.Timestamp.ToString("o"), msg.FileSize);
                 }
 
                 await MarkMessagesAsRead(currentUser, friend);
@@ -735,13 +737,14 @@ namespace HermesChatApp.Hubs
                      (m.SenderId == friendEntity.Id && m.ReceiverId == currentUserEntity.Id)) &&
                     m.Id < oldestMessageId)
                 .OrderByDescending(m => m.Timestamp)
-                .Take(20) // Tải thêm 20 tin nhắn cũ
+                .Take(20)
                 .Select(m => new
                 {
                     m.Id,
                     m.Content,
                     m.MessageType,
                     m.FileUrl,
+                    m.FileSize, // Bao gồm FileSize
                     m.IsPinned,
                     m.Timestamp,
                     SenderUsername = m.Sender.Username,
@@ -752,6 +755,41 @@ namespace HermesChatApp.Hubs
             Console.WriteLine($"Loaded {messages.Count} older messages for {currentUser} and {friend}");
 
             await Clients.Caller.SendAsync("ReceiveOlderMessages", messages.OrderBy(m => m.Timestamp).ToList());
+        }
+        public async Task MarkMessageAsSeen(int messageId, string receiverUserName)
+        {
+            var message = await _context.Messages
+                .Include(m => m.Sender)
+                .Include(m => m.Receiver)
+                .FirstOrDefaultAsync(m => m.Id == messageId);
+
+            if (message == null)
+            {
+                Console.WriteLine($"Message with ID {messageId} not found.");
+                return;
+            }
+
+            var receiver = await _context.Users.FirstOrDefaultAsync(u => u.Username == receiverUserName);
+            if (receiver == null)
+            {
+                Console.WriteLine($"Receiver {receiverUserName} not found.");
+                return;
+            }
+
+            if (message.ReceiverId == receiver.Id && !message.IsSeen)
+            {
+                Console.WriteLine($"Marking message {messageId} as seen. Sender: {message.Sender.Username}, Receiver: {receiverUserName}");
+                message.IsSeen = true;
+                await _context.SaveChangesAsync();
+
+                // Gửi tín hiệu "đã xem" đến người gửi
+                await Clients.User(message.Sender.Username).SendAsync("MessageSeen", messageId);
+                Console.WriteLine($"Sent MessageSeen signal for message {messageId} to {message.Sender.Username}");
+            }
+            else
+            {
+                Console.WriteLine($"Message {messageId} not marked as seen. ReceiverId: {message.ReceiverId}, Receiver.Id: {receiver.Id}, IsSeen: {message.IsSeen}");
+            }
         }
     }
 }

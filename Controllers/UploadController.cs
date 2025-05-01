@@ -14,11 +14,11 @@ namespace HermesChatApp.Controllers
             const long maxFileSize = 10 * 1024 * 1024; // 10MB
             if (file.Length > maxFileSize) return BadRequest("File size exceeds 10MB limit.");
 
-            var allowedExtensions = new[] { ".jpg", ".jpeg", ".png", ".pdf", ".doc", ".docx",".gif" };
+            var allowedExtensions = new[] { ".jpg", ".jpeg", ".png", ".pdf", ".doc", ".docx", ".gif", ".webm", ".mp3" };
             var extension = Path.GetExtension(file.FileName).ToLower();
             if (!allowedExtensions.Contains(extension))
             {
-                return BadRequest("File type not allowed. Allowed types: jpg, jpeg, png, pdf, doc, docx.");
+                return BadRequest("File type not allowed. Allowed types: jpg, jpeg, png, pdf, doc, docx, gif, webm, mp3.");
             }
 
             var fileName = Guid.NewGuid() + extension;
@@ -34,7 +34,9 @@ namespace HermesChatApp.Controllers
             {
                 await file.CopyToAsync(stream);
             }
-            return Ok(new { fileUrl = $"/uploads/{fileName}" });
+
+            // Trả về cả fileUrl và fileSize
+            return Ok(new { fileUrl = $"/uploads/{fileName}", fileSize = file.Length });
         }
     }
 }

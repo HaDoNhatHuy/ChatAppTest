@@ -61,6 +61,9 @@ namespace HermesChatApp.Migrations
                         .IsRequired()
                         .HasColumnType("nvarchar(max)");
 
+                    b.Property<long>("FileSize")
+                        .HasColumnType("bigint");
+
                     b.Property<string>("FileUrl")
                         .HasColumnType("nvarchar(max)");
 
@@ -68,6 +71,9 @@ namespace HermesChatApp.Migrations
                         .HasColumnType("bit");
 
                     b.Property<bool>("IsRead")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("IsSeen")
                         .HasColumnType("bit");
 
                     b.Property<string>("MessageType")
